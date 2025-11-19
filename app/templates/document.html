@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <a href="/" class="btn btn-secondary">&larr; Back</a>
+        <span class="h3 ms-3">{{ document.filename }}</span>
+        <span class="badge bg-secondary ms-2">{{ document.status }}</span>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-2">
+        <div class="list-group" id="pageList">
+            {% for page in document.pages %}
+            <a href="#" class="list-group-item list-group-item-action"
+                onclick="loadPage({{ page.id }}, {{ page.page_number }}, '{{ page.image_path }}')">
+                Page {{ page.page_number }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="col-md-10">
+        <div class="row" id="viewer" style="display:none;">
+            <div class="col-md-6 position-relative" id="imageContainer">
+                <img id="pageImage" src="" class="img-fluid border" style="width: 100%;">
+                <div id="overlays"></div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Markdown Analysis
+                    </div>
+                    <div class="card-body overflow-auto" style="max-height: 800px;">
+                        <pre id="markdownContent" class="bg-light p-3"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="placeholder" class="text-center mt-5 text-muted">
+            Select a page to view analysis
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,24 @@
+.bbox {
+    position: absolute;
+    border: 2px solid red;
+    background-color: rgba(255, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.bbox:hover {
+    background-color: rgba(255, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.bbox-tooltip {
+    position: absolute;
+    background: black;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 20;
+    display: none;
+}

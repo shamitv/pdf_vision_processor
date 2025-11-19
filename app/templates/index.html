@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Documents</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <form id="uploadForm" class="d-flex">
+            <input type="file" class="form-control me-2" id="pdfFile" accept=".pdf" required>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+    </div>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Filename</th>
+            <th>Uploaded At</th>
+            <th>Status</th>
+            <th>Pages</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for doc in documents %}
+        <tr>
+            <td>{{ doc.id }}</td>
+            <td>{{ doc.filename }}</td>
+            <td>{{ doc.uploaded_at }}</td>
+            <td>
+                <span
+                    class="badge bg-{{ 'success' if doc.status == 'completed' else 'warning' if doc.status == 'processing' else 'danger' if doc.status == 'failed' else 'secondary' }}">
+                    {{ doc.status }}
+                </span>
+            </td>
+            <td>{{ doc.page_count }}</td>
+            <td>
+                {% if doc.status == 'pending' %}
+                <button class="btn btn-sm btn-success" onclick="processDocument({{ doc.id }})">Process</button>
+                {% endif %}
+                <a href="/documents/{{ doc.id }}" class="btn btn-sm btn-info">View</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
