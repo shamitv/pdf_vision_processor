@@ -39,13 +39,28 @@ def encode_image(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
-def analyze_page_with_llm(image_path: str) -> dict:
+def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> dict:
     """
     Sends the image to the Vision LLM and returns the parsed JSON response.
     """
     base64_image = encode_image(image_path)
     
     prompt = PAGE_ANALYSIS_PROMPT
+
+    # Ensure logs directory exists
+    logs_dir = "logs"
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+
+    # Log Request
+    request_log_path = os.path.join(logs_dir, f"doc_{document_id}_page_{page_num}_request.json")
+    request_data = {
+        "prompt": prompt,
+        "image_path": image_path,
+        "timestamp": datetime.now().isoformat()
+    }
+    with open(request_log_path, "w") as f:
+        json.dump(request_data, f, indent=2)
 
     try:
         response = client.chat.completions.create(
@@ -69,6 +84,12 @@ def analyze_page_with_llm(image_path: str) -> dict:
         )
         
         content = response.choices[0].message.content
+
+        # Log Response
+        response_log_path = os.path.join(logs_dir, f"doc_{document_id}_page_{page_num}_response.json")
+        with open(response_log_path, "w") as f:
+            f.write(content)
+
         return json.loads(content)
     except Exception as e:
         print(f"Error calling LLM: {e}")
@@ -107,7 +128,7 @@ def process_document(document_id: int, db: Session):
             db.refresh(page)
 
             # 3. Call LLM
-            analysis_result = analyze_page_with_llm(image_path)
+            analysis_result = analyze_page_with_llm(image_path, doc.id, page_num)
             
             # 4. Store Analysis
             analysis = models.PageAnalysis(

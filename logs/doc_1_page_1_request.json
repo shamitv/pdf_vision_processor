@@ -1,0 +1,5 @@
+{
+  "prompt": "\nAnalyze this page image. \n1. Extract the full text content in Markdown format.\n2. Identify all layout elements (paragraphs, headings, tables, images) and provide their bounding boxes.\n\nReturn a JSON object with the following structure:\n{\n    \"markdown\": \"The full markdown text...\",\n    \"elements\": [\n        {\n            \"id\": \"unique_id\",\n            \"type\": \"paragraph|heading|table|image\",\n            \"text\": \"content of the element...\",\n            \"box_2d\": [ymin, xmin, ymax, xmax] \n        }\n    ]\n}\nNote: box_2d should be normalized coordinates (0-1000).\nEnsure the response is valid JSON.\n",
+  "image_path": "data/images/1/page_1.png",
+  "timestamp": "2025-11-20T17:48:31.230610"
+}
