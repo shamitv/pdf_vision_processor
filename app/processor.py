@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from . import models, database
 from datetime import datetime
 from .prompts import PAGE_ANALYSIS_PROMPT
+from .utils.overlay import generate_overlay_image
 
 # Configuration
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -146,6 +147,12 @@ def process_document(document_id: int, db: Session):
 
             # 3. Call LLM
             analysis_result = analyze_page_with_llm(image_path, doc.id, page_num)
+
+            # Generate overlay image as part of processing pipeline
+            try:
+                generate_overlay_image(image_path, analysis_result.get("elements") or [])
+            except Exception as overlay_error:
+                print(f"Overlay generation failed for doc {document_id} page {page_num}: {overlay_error}")
             
             # 4. Store Analysis
             analysis = models.PageAnalysis(
