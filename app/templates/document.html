@@ -67,9 +67,50 @@
     </div>
     <div class="col-md-10">
         <div class="row" id="viewer" style="display:none;">
-            <div class="col-md-6 position-relative" id="imageContainer">
-                <img id="pageImage" src="" class="img-fluid border" style="width: 100%;">
-                <div id="overlays"></div>
+            <div class="col-md-6">
+                <div class="position-relative" id="imageContainer">
+                    <img id="pageImage" src="" class="img-fluid border" style="width: 100%;">
+                    <div id="overlays"></div>
+                </div>
+                <!-- Bounding Box Info Panel -->
+                <div id="bboxInfo" class="card mt-3" style="display:none;">
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <span>Selected Element Info</span>
+                        <button class="btn btn-sm btn-light" onclick="closeBboxInfo()">×</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>Type:</strong> <span id="bboxType" class="badge bg-secondary"></span>
+                            </div>
+                            <div class="col-6">
+                                <strong>ID:</strong> <span id="bboxId" class="text-muted"></span>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <strong>Coordinates (pixels):</strong>
+                            <div class="row mt-1">
+                                <div class="col-3"><small class="text-muted">X Min:</small> <code id="bboxXmin"></code>
+                                </div>
+                                <div class="col-3"><small class="text-muted">Y Min:</small> <code id="bboxYmin"></code>
+                                </div>
+                                <div class="col-3"><small class="text-muted">X Max:</small> <code id="bboxXmax"></code>
+                                </div>
+                                <div class="col-3"><small class="text-muted">Y Max:</small> <code id="bboxYmax"></code>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <strong>Dimensions:</strong>
+                            <span id="bboxDimensions" class="text-muted"></span>
+                        </div>
+                        <div class="mt-2">
+                            <strong>Text:</strong>
+                            <div id="bboxText" class="bg-light p-2 mt-1 rounded"
+                                style="max-height: 100px; overflow-y: auto; font-size: 0.9em;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="col-md-6">
                 <div class="card">

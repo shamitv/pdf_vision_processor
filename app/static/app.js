@@ -65,6 +65,9 @@ async function loadPage(pageId, pageNum, imagePath) {
     overlays.innerHTML = '';
     document.getElementById('markdownContent').textContent = 'Loading...';
 
+    // Hide bbox info panel
+    document.getElementById('bboxInfo').style.display = 'none';
+
     // Fetch analysis
     try {
         const response = await fetch(`/pages/${pageId}/analysis`);
@@ -92,31 +95,99 @@ function renderOverlays(elements) {
 
     if (!elements) return;
 
-    // Wait for image to load to get natural dimensions? 
-    // Actually, if we use percentage based positioning, we don't need natural dimensions if the box_2d is normalized.
-    // The prompt asked for normalized 0-1000 coordinates.
+    // Function to render boxes once we have image dimensions
+    const renderBoxes = () => {
+        // Clear any existing overlays
+        overlays.innerHTML = '';
 
-    elements.forEach(el => {
-        if (!el.box_2d) return;
+        // Get the natural (original) dimensions of the image
+        const imageWidth = img.naturalWidth;
+        const imageHeight = img.naturalHeight;
 
-        const [xmin, ymin, xmax, ymax] = el.box_2d;
+        if (!imageWidth || !imageHeight) {
+            console.warn('Image dimensions not available yet');
+            return;
+        }
 
-        const div = document.createElement('div');
-        div.className = 'bbox';
+        elements.forEach((el, index) => {
+            if (!el.box_2d) return;
 
-        // Convert 0-1000 to percentage
-        div.style.top = (ymin / 10) + '%';
-        div.style.left = (xmin / 10) + '%';
-        div.style.height = ((ymax - ymin) / 10) + '%';
-        div.style.width = ((xmax - xmin) / 10) + '%';
+            const [xmin, ymin, xmax, ymax] = el.box_2d;
 
-        // Color coding
-        if (el.type === 'heading') div.style.borderColor = 'blue';
-        if (el.type === 'table') div.style.borderColor = 'green';
-        if (el.type === 'image') div.style.borderColor = 'orange';
+            const div = document.createElement('div');
+            div.className = 'bbox';
+            div.dataset.elementIndex = index;
 
-        div.title = `${el.type}: ${el.text ? el.text.substring(0, 50) + '...' : ''}`;
+            // Convert absolute pixel coordinates to percentage
+            // box_2d contains absolute pixel coordinates from the original image
+            div.style.top = ((ymin / imageHeight) * 100) + '%';
+            div.style.left = ((xmin / imageWidth) * 100) + '%';
+            div.style.height = (((ymax - ymin) / imageHeight) * 100) + '%';
+            div.style.width = (((xmax - xmin) / imageWidth) * 100) + '%';
 
-        overlays.appendChild(div);
-    });
+            // Color coding
+            if (el.type === 'heading') div.style.borderColor = 'blue';
+            if (el.type === 'table') div.style.borderColor = 'green';
+            if (el.type === 'image') div.style.borderColor = 'orange';
+
+            div.title = `${el.type}: ${el.text ? el.text.substring(0, 50) + '...' : ''}`;
+
+            // Add click handler
+            div.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showBboxInfo(el, index);
+
+                // Visual feedback - highlight selected bbox
+                document.querySelectorAll('.bbox').forEach(b => b.classList.remove('bbox-selected'));
+                div.classList.add('bbox-selected');
+            });
+
+            overlays.appendChild(div);
+        });
+    };
+
+    // If image is already loaded, render immediately
+    if (img.complete && img.naturalWidth) {
+        renderBoxes();
+    } else {
+        // Wait for image to load
+        img.onload = renderBoxes;
+    }
 }
+
+function showBboxInfo(element, index) {
+    const infoPanel = document.getElementById('bboxInfo');
+
+    // Populate the info panel
+    document.getElementById('bboxType').textContent = element.type || 'unknown';
+    document.getElementById('bboxId').textContent = element.id || `element-${index}`;
+
+    if (element.box_2d) {
+        const [xmin, ymin, xmax, ymax] = element.box_2d;
+        document.getElementById('bboxXmin').textContent = xmin;
+        document.getElementById('bboxYmin').textContent = ymin;
+        document.getElementById('bboxXmax').textContent = xmax;
+        document.getElementById('bboxYmax').textContent = ymax;
+
+        const width = xmax - xmin;
+        const height = ymax - ymin;
+        document.getElementById('bboxDimensions').textContent = `${width} × ${height} px`;
+    }
+
+    document.getElementById('bboxText').textContent = element.text || 'No text content';
+
+    // Show the panel with animation
+    infoPanel.style.display = 'block';
+
+    // Smooth scroll to the info panel
+    setTimeout(() => {
+        infoPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+}
+
+function closeBboxInfo() {
+    document.getElementById('bboxInfo').style.display = 'none';
+    // Remove selection highlight
+    document.querySelectorAll('.bbox').forEach(b => b.classList.remove('bbox-selected'));
+}
+
