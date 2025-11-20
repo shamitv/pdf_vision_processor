@@ -95,7 +95,7 @@ function renderOverlays(elements) {
 
     if (!elements) return;
 
-    const clampValue = (value, max) => Math.min(max, Math.max(0, value));
+    const clampPercent = (value) => Math.min(100, Math.max(0, value));
 
     // Function to render boxes once we have image dimensions
     const renderBoxes = () => {
@@ -105,16 +105,11 @@ function renderOverlays(elements) {
         // Get the natural (original) dimensions of the image
         const imageWidth = img.naturalWidth;
         const imageHeight = img.naturalHeight;
-        const displayWidth = img.clientWidth;
-        const displayHeight = img.clientHeight;
 
-        if (!imageWidth || !imageHeight || !displayWidth || !displayHeight) {
+        if (!imageWidth || !imageHeight) {
             console.warn('Image dimensions not available yet');
             return;
         }
-
-        overlays.style.width = `${displayWidth}px`;
-        overlays.style.height = `${displayHeight}px`;
 
         elements.forEach((el, index) => {
             if (!el.box_2d) return;
@@ -135,30 +130,35 @@ function renderOverlays(elements) {
                 normalizer = 'thousand';
             }
 
-            const toDisplayX = (value) => {
-                if (normalizer === 'unit') return value * displayWidth;
-                if (normalizer === 'thousand') return (value / 1000) * displayWidth;
-                return (value / imageWidth) * displayWidth;
+            const toRelativeX = (value) => {
+                if (normalizer === 'unit') return value;
+                if (normalizer === 'thousand') return value / 1000;
+                return value / imageWidth;
             };
 
-            const toDisplayY = (value) => {
-                if (normalizer === 'unit') return value * displayHeight;
-                if (normalizer === 'thousand') return (value / 1000) * displayHeight;
-                return (value / imageHeight) * displayHeight;
+            const toRelativeY = (value) => {
+                if (normalizer === 'unit') return value;
+                if (normalizer === 'thousand') return value / 1000;
+                return value / imageHeight;
             };
 
-            const topPx = clampValue(toDisplayY(ymin), displayHeight);
-            const leftPx = clampValue(toDisplayX(xmin), displayWidth);
-            const bottomPx = clampValue(toDisplayY(ymax), displayHeight);
-            const rightPx = clampValue(toDisplayX(xmax), displayWidth);
+            const topPctRaw = toRelativeY(ymin) * 100;
+            const bottomPctRaw = toRelativeY(ymax) * 100;
+            const leftPctRaw = toRelativeX(xmin) * 100;
+            const rightPctRaw = toRelativeX(xmax) * 100;
 
-            const widthPx = Math.max(0, rightPx - leftPx);
-            const heightPx = Math.max(0, bottomPx - topPx);
+            const topPct = clampPercent(Math.min(topPctRaw, bottomPctRaw));
+            const bottomPct = clampPercent(Math.max(topPctRaw, bottomPctRaw));
+            const leftPct = clampPercent(Math.min(leftPctRaw, rightPctRaw));
+            const rightPct = clampPercent(Math.max(leftPctRaw, rightPctRaw));
 
-            div.style.top = `${topPx}px`;
-            div.style.left = `${leftPx}px`;
-            div.style.height = `${heightPx}px`;
-            div.style.width = `${widthPx}px`;
+            const widthPct = Math.max(0, rightPct - leftPct);
+            const heightPct = Math.max(0, bottomPct - topPct);
+
+            div.style.top = `${topPct}%`;
+            div.style.left = `${leftPct}%`;
+            div.style.height = `${heightPct}%`;
+            div.style.width = `${widthPct}%`;
 
             // Color coding
             if (el.type === 'heading') div.style.borderColor = 'blue';
@@ -207,13 +207,11 @@ function showBboxInfo(element, index) {
         const previewImg = document.getElementById('pageImage');
         const imageWidth = previewImg?.naturalWidth || 0;
         const imageHeight = previewImg?.naturalHeight || 0;
-        const displayWidth = previewImg?.clientWidth || 0;
-        const displayHeight = previewImg?.clientHeight || 0;
 
         let widthPx = xmax - xmin;
         let heightPx = ymax - ymin;
 
-        if (imageWidth && imageHeight && displayWidth && displayHeight) {
+        if (imageWidth && imageHeight) {
             let normalizer = 'pixels';
             if (xmax <= 1 && ymax <= 1) {
                 normalizer = 'unit';
@@ -222,14 +220,11 @@ function showBboxInfo(element, index) {
             }
 
             if (normalizer === 'unit') {
-                widthPx = Math.round((xmax - xmin) * displayWidth);
-                heightPx = Math.round((ymax - ymin) * displayHeight);
+                widthPx = Math.round((xmax - xmin) * imageWidth);
+                heightPx = Math.round((ymax - ymin) * imageHeight);
             } else if (normalizer === 'thousand') {
-                widthPx = Math.round(((xmax - xmin) / 1000) * displayWidth);
-                heightPx = Math.round(((ymax - ymin) / 1000) * displayHeight);
-            } else {
-                widthPx = Math.round(((xmax - xmin) / imageWidth) * displayWidth);
-                heightPx = Math.round(((ymax - ymin) / imageHeight) * displayHeight);
+                widthPx = Math.round(((xmax - xmin) / 1000) * imageWidth);
+                heightPx = Math.round(((ymax - ymin) / 1000) * imageHeight);
             }
         }
 
