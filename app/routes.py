@@ -60,11 +60,10 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Create DB record
+    # Create DB record (status is now on DocumentVersion, not Document)
     db_doc = models.Document(
         filename=file.filename,
-        original_path=file_path,
-        status=models.ProcessingStatus.PENDING
+        original_path=file_path
     )
     db.add(db_doc)
     db.commit()
@@ -77,7 +76,13 @@ def process_document(document_id: int, background_tasks: BackgroundTasks, db: Se
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    if doc.status == models.ProcessingStatus.PROCESSING:
+    # Check if any version is currently processing
+    processing_version = db.query(models.DocumentVersion).filter(
+        models.DocumentVersion.document_id == document_id,
+        models.DocumentVersion.status == models.ProcessingStatus.PROCESSING
+    ).first()
+    
+    if processing_version:
         raise HTTPException(status_code=400, detail="Document is already processing")
 
     background_tasks.add_task(processor.process_document, document_id, database.SessionLocal())
