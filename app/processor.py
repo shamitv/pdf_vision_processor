@@ -6,6 +6,7 @@ from openai import OpenAI
 from sqlalchemy.orm import Session
 from . import models, database
 from datetime import datetime
+from .prompts import PAGE_ANALYSIS_PROMPT
 
 # Configuration
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -44,26 +45,7 @@ def analyze_page_with_llm(image_path: str) -> dict:
     """
     base64_image = encode_image(image_path)
     
-    prompt = """
-    Analyze this page image. 
-    1. Extract the full text content in Markdown format.
-    2. Identify all layout elements (paragraphs, headings, tables, images) and provide their bounding boxes.
-    
-    Return a JSON object with the following structure:
-    {
-        "markdown": "The full markdown text...",
-        "elements": [
-            {
-                "id": "unique_id",
-                "type": "paragraph|heading|table|image",
-                "text": "content of the element...",
-                "box_2d": [ymin, xmin, ymax, xmax] 
-            }
-        ]
-    }
-    Note: box_2d should be normalized coordinates (0-1000).
-    Ensure the response is valid JSON.
-    """
+    prompt = PAGE_ANALYSIS_PROMPT
 
     try:
         response = client.chat.completions.create(
