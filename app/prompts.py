@@ -12,7 +12,7 @@ Return a JSON object with the following structure:
             "id": "unique_id",
             "type": "paragraph|heading|table|image",
             "text": "content of the element...",
-            "box_2d": [ymin, xmin, ymax, xmax] 
+            "box_2d": [xmin, ymin, xmax, ymax] 
         }
     ]
 }

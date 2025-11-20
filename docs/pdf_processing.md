@@ -56,7 +56,7 @@ Return a JSON object with the following structure:
             "id": "unique_id",
             "type": "paragraph|heading|table|image",
             "text": "content of the element...",
-            "box_2d": [ymin, xmin, ymax, xmax] 
+            "box_2d": [xmin, ymin, xmax, ymax] 
         }
     ]
 }
@@ -73,6 +73,6 @@ The LLM response is expected to be a JSON object with two main keys:
 *   `elements`: A list of objects, where each object represents a layout element (paragraph, heading, table, etc.) and includes:
     *   `type`: The type of element.
     *   `text`: The text content of the element.
-    *   `box_2d`: The bounding box coordinates [ymin, xmin, ymax, xmax], normalized to a 0-1000 scale.
+    *   `box_2d`: The bounding box coordinates [xmin, ymin, xmax, ymax], normalized to a 0-1000 scale.
 
 This structure allows the application to display both the readable text and overlay bounding boxes on the original image in the UI.

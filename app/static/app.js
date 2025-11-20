@@ -99,7 +99,7 @@ function renderOverlays(elements) {
     elements.forEach(el => {
         if (!el.box_2d) return;
 
-        const [ymin, xmin, ymax, xmax] = el.box_2d;
+        const [xmin, ymin, xmax, ymax] = el.box_2d;
 
         const div = document.createElement('div');
         div.className = 'bbox';
