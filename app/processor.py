@@ -48,7 +48,7 @@ def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> d
     prompt = PAGE_ANALYSIS_PROMPT
 
     # Ensure logs directory exists
-    logs_dir = "logs"
+    logs_dir = os.path.join("logs", "llm_debug")
     if not os.path.exists(logs_dir):
         os.makedirs(logs_dir)
 
