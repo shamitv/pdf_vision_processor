@@ -95,6 +95,8 @@ function renderOverlays(elements) {
 
     if (!elements) return;
 
+    const clampValue = (value, max) => Math.min(max, Math.max(0, value));
+
     // Function to render boxes once we have image dimensions
     const renderBoxes = () => {
         // Clear any existing overlays
@@ -103,11 +105,16 @@ function renderOverlays(elements) {
         // Get the natural (original) dimensions of the image
         const imageWidth = img.naturalWidth;
         const imageHeight = img.naturalHeight;
+        const displayWidth = img.clientWidth;
+        const displayHeight = img.clientHeight;
 
-        if (!imageWidth || !imageHeight) {
+        if (!imageWidth || !imageHeight || !displayWidth || !displayHeight) {
             console.warn('Image dimensions not available yet');
             return;
         }
+
+        overlays.style.width = `${displayWidth}px`;
+        overlays.style.height = `${displayHeight}px`;
 
         elements.forEach((el, index) => {
             if (!el.box_2d) return;
@@ -118,12 +125,40 @@ function renderOverlays(elements) {
             div.className = 'bbox';
             div.dataset.elementIndex = index;
 
-            // Convert absolute pixel coordinates to percentage
-            // box_2d contains absolute pixel coordinates from the original image
-            div.style.top = ((ymin / imageHeight) * 100) + '%';
-            div.style.left = ((xmin / imageWidth) * 100) + '%';
-            div.style.height = (((ymax - ymin) / imageHeight) * 100) + '%';
-            div.style.width = (((xmax - xmin) / imageWidth) * 100) + '%';
+            // Decide which scale to use for the coordinates.
+            // Many LLM responses normalise to a 0-1000 grid rather than returning
+            // absolute pixels, so detect that pattern and adjust on the fly.
+            let normalizer = 'pixels';
+            if (xmax <= 1 && ymax <= 1) {
+                normalizer = 'unit';
+            } else if (xmax > imageWidth || ymax > imageHeight) {
+                normalizer = 'thousand';
+            }
+
+            const toDisplayX = (value) => {
+                if (normalizer === 'unit') return value * displayWidth;
+                if (normalizer === 'thousand') return (value / 1000) * displayWidth;
+                return (value / imageWidth) * displayWidth;
+            };
+
+            const toDisplayY = (value) => {
+                if (normalizer === 'unit') return value * displayHeight;
+                if (normalizer === 'thousand') return (value / 1000) * displayHeight;
+                return (value / imageHeight) * displayHeight;
+            };
+
+            const topPx = clampValue(toDisplayY(ymin), displayHeight);
+            const leftPx = clampValue(toDisplayX(xmin), displayWidth);
+            const bottomPx = clampValue(toDisplayY(ymax), displayHeight);
+            const rightPx = clampValue(toDisplayX(xmax), displayWidth);
+
+            const widthPx = Math.max(0, rightPx - leftPx);
+            const heightPx = Math.max(0, bottomPx - topPx);
+
+            div.style.top = `${topPx}px`;
+            div.style.left = `${leftPx}px`;
+            div.style.height = `${heightPx}px`;
+            div.style.width = `${widthPx}px`;
 
             // Color coding
             if (el.type === 'heading') div.style.borderColor = 'blue';
@@ -169,9 +204,36 @@ function showBboxInfo(element, index) {
         document.getElementById('bboxXmax').textContent = xmax;
         document.getElementById('bboxYmax').textContent = ymax;
 
-        const width = xmax - xmin;
-        const height = ymax - ymin;
-        document.getElementById('bboxDimensions').textContent = `${width} × ${height} px`;
+        const previewImg = document.getElementById('pageImage');
+        const imageWidth = previewImg?.naturalWidth || 0;
+        const imageHeight = previewImg?.naturalHeight || 0;
+        const displayWidth = previewImg?.clientWidth || 0;
+        const displayHeight = previewImg?.clientHeight || 0;
+
+        let widthPx = xmax - xmin;
+        let heightPx = ymax - ymin;
+
+        if (imageWidth && imageHeight && displayWidth && displayHeight) {
+            let normalizer = 'pixels';
+            if (xmax <= 1 && ymax <= 1) {
+                normalizer = 'unit';
+            } else if (xmax > imageWidth || ymax > imageHeight) {
+                normalizer = 'thousand';
+            }
+
+            if (normalizer === 'unit') {
+                widthPx = Math.round((xmax - xmin) * displayWidth);
+                heightPx = Math.round((ymax - ymin) * displayHeight);
+            } else if (normalizer === 'thousand') {
+                widthPx = Math.round(((xmax - xmin) / 1000) * displayWidth);
+                heightPx = Math.round(((ymax - ymin) / 1000) * displayHeight);
+            } else {
+                widthPx = Math.round(((xmax - xmin) / imageWidth) * displayWidth);
+                heightPx = Math.round(((ymax - ymin) / imageHeight) * displayHeight);
+            }
+        }
+
+        document.getElementById('bboxDimensions').textContent = `${widthPx} × ${heightPx} px`;
     }
 
     document.getElementById('bboxText').textContent = element.text || 'No text content';
