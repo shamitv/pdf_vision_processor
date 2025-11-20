@@ -5,19 +5,64 @@
     <div class="col">
         <a href="/" class="btn btn-secondary">&larr; Back</a>
         <span class="h3 ms-3">{{ document.filename }}</span>
-        <span class="badge bg-secondary ms-2">{{ document.status }}</span>
+        {% if selected_version %}
+        <span class="badge bg-secondary ms-2">{{ selected_version.status }}</span>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Version Controls -->
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <label for="versionSelect" class="form-label">Version:</label>
+                        <select class="form-select" id="versionSelect" onchange="changeVersion()">
+                            {% if document.versions %}
+                            {% for version in document.versions|reverse %}
+                            <option value="{{ version.id }}" {% if selected_version and version.id==selected_version.id
+                                %}selected{% endif %}>
+                                Version {{ version.version_number }} - {{ version.status }} ({{
+                                version.created_at.strftime('%Y-%m-%d %H:%M') }})
+                            </option>
+                            {% endfor %}
+                            {% else %}
+                            <option value="">No versions available</option>
+                            {% endif %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-primary" onclick="reprocessDocument()">
+                            <i class="bi bi-arrow-clockwise"></i> Re-process Document
+                        </button>
+                    </div>
+                    {% if selected_version %}
+                    <div class="col-md-4 text-end">
+                        <small class="text-muted">
+                            Pages: {{ selected_version.page_count }}<br>
+                            Created: {{ selected_version.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <div class="row">
     <div class="col-md-2">
         <div class="list-group" id="pageList">
-            {% for page in document.pages %}
+            {% if selected_version and selected_version.pages %}
+            {% for page in selected_version.pages %}
             <a href="#" class="list-group-item list-group-item-action page-link-item" data-page-id="{{ page.id }}"
                 data-page-number="{{ page.page_number }}" data-image-path="{{ page.image_path }}">
                 Page {{ page.page_number }}
             </a>
             {% endfor %}
+            {% endif %}
         </div>
     </div>
     <div class="col-md-10">
@@ -38,8 +83,41 @@
             </div>
         </div>
         <div id="placeholder" class="text-center mt-5 text-muted">
+            {% if selected_version and selected_version.pages %}
             Select a page to view analysis
+            {% elif selected_version and selected_version.status == 'processing' %}
+            Processing in progress...
+            {% elif selected_version and selected_version.status == 'failed' %}
+            Processing failed: {{ selected_version.error_message }}
+            {% else %}
+            No version available. Click "Re-process Document" to start processing.
+            {% endif %}
         </div>
     </div>
 </div>
+
+<script>
+    function changeVersion() {
+        const versionId = document.getElementById('versionSelect').value;
+        if (versionId) {
+            window.location.href = `/documents/{{ document.id }}?version_id=${versionId}`;
+        }
+    }
+
+    function reprocessDocument() {
+        if (confirm('Are you sure you want to re-process this document? This will create a new version.')) {
+            fetch('/process/{{ document.id }}', {
+                method: 'POST'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    alert('Processing started! The page will reload.');
+                    window.location.reload();
+                })
+                .catch(error => {
+                    alert('Error starting processing: ' + error);
+                });
+        }
+    }
+</script>
 {% endblock %}

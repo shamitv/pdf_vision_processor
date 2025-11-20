@@ -19,7 +19,29 @@ def get_db():
 @router.get("/", response_model=List[schemas.Document])
 def list_documents_ui(request: Request, db: Session = Depends(get_db)):
     documents = db.query(models.Document).order_by(models.Document.uploaded_at.desc()).all()
-    return templates.TemplateResponse("index.html", {"request": request, "documents": documents})
+    
+    # Add latest version info for each document to make it easier for the template
+    docs_with_status = []
+    for doc in documents:
+        doc_dict = {
+            "id": doc.id,
+            "filename": doc.filename,
+            "uploaded_at": doc.uploaded_at,
+            "versions": doc.versions
+        }
+        
+        # Get latest version for display
+        if doc.versions:
+            latest_version = max(doc.versions, key=lambda v: v.version_number)
+            doc_dict["status"] = latest_version.status
+            doc_dict["page_count"] = latest_version.page_count
+        else:
+            doc_dict["status"] = models.ProcessingStatus.PENDING
+            doc_dict["page_count"] = 0
+            
+        docs_with_status.append(doc_dict)
+    
+    return templates.TemplateResponse("index.html", {"request": request, "documents": docs_with_status})
 
 @router.get("/documents", response_model=List[schemas.Document])
 def list_documents(db: Session = Depends(get_db)):
@@ -62,14 +84,33 @@ def process_document(document_id: int, background_tasks: BackgroundTasks, db: Se
     return {"message": "Processing started"}
 
 @router.get("/documents/{document_id}", response_model=schemas.Document)
-def get_document(document_id: int, request: Request, db: Session = Depends(get_db)):
+def get_document(document_id: int, request: Request, version_id: int = None, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == document_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     
+    # Determine which version to display
+    if version_id:
+        selected_version = db.query(models.DocumentVersion).filter(
+            models.DocumentVersion.id == version_id,
+            models.DocumentVersion.document_id == document_id
+        ).first()
+        if not selected_version:
+            raise HTTPException(status_code=404, detail="Version not found")
+    else:
+        # Get latest version by default
+        if doc.versions:
+            selected_version = max(doc.versions, key=lambda v: v.version_number)
+        else:
+            selected_version = None
+    
     # For UI, we might want to return a template
     if "text/html" in request.headers.get("accept", ""):
-        return templates.TemplateResponse("document.html", {"request": request, "document": doc})
+        return templates.TemplateResponse("document.html", {
+            "request": request, 
+            "document": doc,
+            "selected_version": selected_version
+        })
     
     return doc
 

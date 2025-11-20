@@ -97,29 +97,46 @@ def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> d
 
 def process_document(document_id: int, db: Session):
     """
-    Main processing pipeline.
+    Main processing pipeline with versioning support.
     """
     doc = db.query(models.Document).filter(models.Document.id == document_id).first()
     if not doc:
         return
 
     try:
-        doc.status = models.ProcessingStatus.PROCESSING
+        # Determine new version number
+        existing_versions = db.query(models.DocumentVersion).filter(
+            models.DocumentVersion.document_id == doc.id
+        ).all()
+        
+        if existing_versions:
+            version_number = max(v.version_number for v in existing_versions) + 1
+        else:
+            version_number = 1
+
+        # Create DocumentVersion record
+        doc_version = models.DocumentVersion(
+            document_id=doc.id,
+            version_number=version_number,
+            status=models.ProcessingStatus.PROCESSING
+        )
+        db.add(doc_version)
         db.commit()
+        db.refresh(doc_version)
 
         # 1. Convert PDF to Images
-        # Create a specific directory for this document's images
-        doc_images_dir = os.path.join("data", "images", str(doc.id))
+        # Create a version-specific directory for this document's images
+        doc_images_dir = os.path.join("data", "images", str(doc.id), f"v{version_number}")
         image_paths = convert_pdf_to_images(doc.original_path, doc_images_dir)
         
-        doc.page_count = len(image_paths)
+        doc_version.page_count = len(image_paths)
         db.commit()
 
         # 2. Create Page records and Process each page
         for i, image_path in enumerate(image_paths):
             page_num = i + 1
             page = models.Page(
-                document_id=doc.id,
+                document_version_id=doc_version.id,
                 page_number=page_num,
                 image_path=image_path
             )
@@ -139,11 +156,13 @@ def process_document(document_id: int, db: Session):
             db.add(analysis)
             db.commit()
 
-        doc.status = models.ProcessingStatus.COMPLETED
+        doc_version.status = models.ProcessingStatus.COMPLETED
         db.commit()
 
     except Exception as e:
-        doc.status = models.ProcessingStatus.FAILED
-        doc.error_message = str(e)
-        db.commit()
+        if 'doc_version' in locals():
+            doc_version.status = models.ProcessingStatus.FAILED
+            doc_version.error_message = str(e)
+            db.commit()
         print(f"Processing failed for doc {document_id}: {e}")
+

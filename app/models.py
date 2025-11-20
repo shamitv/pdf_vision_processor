@@ -17,21 +17,35 @@ class Document(Base):
     filename = Column(String, index=True)
     original_path = Column(String)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
+
+class DocumentVersion(Base):
+    __tablename__ = "document_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"))
+    version_number = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING)
     page_count = Column(Integer, default=0)
     error_message = Column(String, nullable=True)
 
-    pages = relationship("Page", back_populates="document", cascade="all, delete-orphan")
+    # Relationships
+    document = relationship("Document", back_populates="versions")
+    pages = relationship("Page", back_populates="document_version", cascade="all, delete-orphan")
 
 class Page(Base):
     __tablename__ = "pages"
 
     id = Column(Integer, primary_key=True, index=True)
-    document_id = Column(Integer, ForeignKey("documents.id"))
+    document_version_id = Column(Integer, ForeignKey("document_versions.id"))
     page_number = Column(Integer)
     image_path = Column(String)
 
-    document = relationship("Document", back_populates="pages")
+    # Relationships
+    document_version = relationship("DocumentVersion", back_populates="pages")
     analysis = relationship("PageAnalysis", back_populates="page", uselist=False, cascade="all, delete-orphan")
 
 class PageAnalysis(Base):

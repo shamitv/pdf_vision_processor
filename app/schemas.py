@@ -26,8 +26,23 @@ class PageBase(BaseModel):
 
 class Page(PageBase):
     id: int
-    document_id: int
+    document_version_id: int
     analysis: Optional[PageAnalysis] = None
+
+    class Config:
+        from_attributes = True
+
+class DocumentVersionBase(BaseModel):
+    version_number: int
+    status: ProcessingStatus
+
+class DocumentVersion(DocumentVersionBase):
+    id: int
+    document_id: int
+    created_at: datetime
+    page_count: int
+    error_message: Optional[str] = None
+    pages: List[Page] = []
 
     class Config:
         from_attributes = True
@@ -38,10 +53,7 @@ class DocumentBase(BaseModel):
 class Document(DocumentBase):
     id: int
     uploaded_at: datetime
-    status: ProcessingStatus
-    page_count: int
-    error_message: Optional[str] = None
-    pages: List[Page] = []
+    versions: List[DocumentVersion] = []
 
     class Config:
         from_attributes = True
