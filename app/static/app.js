@@ -68,6 +68,8 @@ async function loadPage(pageId, pageNum, imagePath) {
     // Hide bbox info panel
     document.getElementById('bboxInfo').style.display = 'none';
 
+    resetOverlayPreview();
+
     // Fetch analysis
     try {
         const response = await fetch(`/pages/${pageId}/analysis`);
@@ -78,6 +80,7 @@ async function loadPage(pageId, pageNum, imagePath) {
             if (data.raw_json) {
                 const analysis = JSON.parse(data.raw_json);
                 renderOverlays(analysis.elements);
+                loadOverlayPreview(pageId);
             }
         } else {
             document.getElementById('markdownContent').textContent = 'Analysis not available yet.';
@@ -188,6 +191,50 @@ function renderOverlays(elements) {
         // Wait for image to load
         img.onload = renderBoxes;
     }
+}
+
+function resetOverlayPreview() {
+    const overlayCard = document.getElementById('overlayPreviewCard');
+    const overlayImage = document.getElementById('overlayPreviewImage');
+    const overlayPlaceholder = document.getElementById('overlayPreviewPlaceholder');
+
+    if (overlayCard) overlayCard.style.display = 'none';
+    if (overlayImage) {
+        overlayImage.src = '';
+        overlayImage.onload = null;
+        overlayImage.onerror = null;
+    }
+    if (overlayPlaceholder) {
+        overlayPlaceholder.style.display = 'block';
+        overlayPlaceholder.textContent = 'Select a page to generate a rendered overlay image preview.';
+    }
+}
+
+function loadOverlayPreview(pageId) {
+    const overlayCard = document.getElementById('overlayPreviewCard');
+    const overlayImage = document.getElementById('overlayPreviewImage');
+    const overlayPlaceholder = document.getElementById('overlayPreviewPlaceholder');
+
+    if (!overlayImage) return;
+
+    if (overlayPlaceholder) {
+        overlayPlaceholder.style.display = 'block';
+        overlayPlaceholder.textContent = 'Generating overlay preview image...';
+    }
+
+    const timestamp = Date.now();
+    overlayImage.onload = () => {
+        if (overlayCard) overlayCard.style.display = 'block';
+        if (overlayPlaceholder) overlayPlaceholder.style.display = 'none';
+    };
+    overlayImage.onerror = () => {
+        if (overlayCard) overlayCard.style.display = 'none';
+        if (overlayPlaceholder) {
+            overlayPlaceholder.style.display = 'block';
+            overlayPlaceholder.textContent = 'Overlay preview not available for this page.';
+        }
+    };
+    overlayImage.src = `/pages/${pageId}/overlay-image?t=${timestamp}`;
 }
 
 function showBboxInfo(element, index) {

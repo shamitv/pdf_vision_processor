@@ -7,3 +7,4 @@ openai
 pymupdf
 httpx
 python-dotenv
+Pillow
