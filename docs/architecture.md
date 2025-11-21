@@ -58,7 +58,17 @@ Manages persistent storage using SQLite.
     *   Frontend fetches Page Image and Analysis Data.
     *   JS renders image and draws bounding boxes over it.
 
-## 5. Database Schema
+## 5. Processing Logs
+
+Each processing run writes a structured timeline to `logs/processing/doc_{document_id}_v{version}.log`. Entries follow the format `TIMESTAMP key=value ...` and capture:
+
+- Run lifecycle transitions (start, completion, failures) along with the PDF name/id and resolved version number.
+- Major pipeline stages (PDF conversion, page creation, overlay generation, persistence) and their durations or errors.
+- LLM request checkpoints including `status=sent` before the API call and completion records with latency/token metadata.
+
+These logs exist alongside the existing `logs/llm_debug` JSON payloads and provide a quick human-readable trail for operators to diagnose issues without opening raw request/response files.
+
+## 6. Database Schema
 
 ```mermaid
 erDiagram
@@ -87,7 +97,7 @@ erDiagram
     }
 ```
 
-## 6. Directory Structure
+## 7. Directory Structure
 
 ```
 pdf_vision_processor/
