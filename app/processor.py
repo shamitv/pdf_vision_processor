@@ -8,6 +8,7 @@ from . import models, database
 from datetime import datetime
 from .prompts import PAGE_ANALYSIS_PROMPT
 from .utils.overlay import generate_overlay_image
+import time
 
 # Configuration
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
@@ -93,7 +94,17 @@ def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> d
         with open(response_log_path, "w") as f:
             f.write(content)
 
-        return json.loads(content)
+        result = json.loads(content)
+        
+        # Add usage metadata if available
+        if hasattr(response, 'usage') and response.usage:
+            result['_usage'] = {
+                'total_tokens': response.usage.total_tokens,
+                'prompt_tokens': response.usage.prompt_tokens,
+                'completion_tokens': response.usage.completion_tokens
+            }
+            
+        return result
     except Exception as e:
         print(f"Error calling LLM: {e}")
         return {"markdown": "", "elements": [], "error": str(e)}
@@ -128,11 +139,14 @@ def process_document(document_id: int, db: Session):
         db.refresh(doc_version)
 
         # 1. Convert PDF to Images
+        t0_conversion = time.perf_counter()
         # Create a version-specific directory for this document's images
         doc_images_dir = os.path.join("data", "images", str(doc.id), f"v{version_number}")
         image_paths = convert_pdf_to_images(doc.original_path, doc_images_dir)
+        t1_conversion = time.perf_counter()
         
         doc_version.page_count = len(image_paths)
+        doc_version.pdf_conversion_time_seconds = t1_conversion - t0_conversion
         db.commit()
 
         # 2. Create Page records and Process each page
@@ -148,9 +162,12 @@ def process_document(document_id: int, db: Session):
             db.refresh(page)
 
             # 3. Call LLM
+            t0_llm = time.perf_counter()
             analysis_result = analyze_page_with_llm(image_path, doc.id, page_num)
+            t1_llm = time.perf_counter()
 
             # Generate overlay image as part of processing pipeline
+            t0_post = time.perf_counter()
             try:
                 generate_overlay_image(image_path, analysis_result.get("elements") or [])
             except Exception as overlay_error:
@@ -163,9 +180,23 @@ def process_document(document_id: int, db: Session):
                 raw_json=json.dumps(analysis_result)
             )
             db.add(analysis)
+            
+            # Update Page Telemetry
+            page.llm_latency_seconds = t1_llm - t0_llm
+            
+            usage = analysis_result.get('_usage', {})
+            page.token_count = usage.get('total_tokens', 0)
+            
+            # Accumulate version totals
+            doc_version.total_tokens += page.token_count
+            
+            t1_post = time.perf_counter()
+            page.post_process_time_seconds = t1_post - t0_post
+            
             db.commit()
 
         doc_version.status = models.ProcessingStatus.COMPLETED
+        doc_version.total_processing_time_seconds = time.perf_counter() - t0_conversion # approx total time since start
         db.commit()
 
     except Exception as e:

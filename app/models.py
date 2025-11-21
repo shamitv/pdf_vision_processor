@@ -31,6 +31,11 @@ class DocumentVersion(Base):
     status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING)
     page_count = Column(Integer, default=0)
     error_message = Column(String, nullable=True)
+    
+    # Telemetry
+    total_processing_time_seconds = Column(Float, default=0.0)
+    pdf_conversion_time_seconds = Column(Float, default=0.0)
+    total_tokens = Column(Integer, default=0)
 
     # Relationships
     document = relationship("Document", back_populates="versions")
@@ -43,6 +48,11 @@ class Page(Base):
     document_version_id = Column(Integer, ForeignKey("document_versions.id"))
     page_number = Column(Integer)
     image_path = Column(String)
+    
+    # Telemetry
+    llm_latency_seconds = Column(Float, default=0.0)
+    post_process_time_seconds = Column(Float, default=0.0)
+    token_count = Column(Integer, default=0)
 
     # Relationships
     document_version = relationship("DocumentVersion", back_populates="pages")

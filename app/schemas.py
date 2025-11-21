@@ -23,6 +23,11 @@ class PageAnalysis(PageAnalysisBase):
 class PageBase(BaseModel):
     page_number: int
     image_path: str
+    
+    # Telemetry
+    llm_latency_seconds: float = 0.0
+    post_process_time_seconds: float = 0.0
+    token_count: int = 0
 
 class Page(PageBase):
     id: int
@@ -42,6 +47,12 @@ class DocumentVersion(DocumentVersionBase):
     created_at: datetime
     page_count: int
     error_message: Optional[str] = None
+    
+    # Telemetry
+    total_processing_time_seconds: float = 0.0
+    pdf_conversion_time_seconds: float = 0.0
+    total_tokens: int = 0
+    
     pages: List[Page] = []
 
     class Config:
