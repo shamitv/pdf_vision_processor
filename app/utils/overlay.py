@@ -8,12 +8,13 @@ _COLOR_MAP = {
     "image": (255, 140, 0, 255),  # orange
 }
 _DEFAULT_COLOR = (255, 0, 0, 255)
+_OVERLAY_VERSION = "v2"
 
 
 def generate_overlay_image(image_path: str, elements: Iterable[dict]) -> str:
     """Generate (or reuse cached) overlay image visualizing detected elements."""
     base, _ = os.path.splitext(image_path)
-    overlay_path = f"{base}_overlay.png"
+    overlay_path = f"{base}_overlay_{_OVERLAY_VERSION}.png"
 
     source_mtime = os.path.getmtime(image_path)
     if os.path.exists(overlay_path) and os.path.getmtime(overlay_path) >= source_mtime:
@@ -47,16 +48,21 @@ def generate_overlay_image(image_path: str, elements: Iterable[dict]) -> str:
 def _normalize_bbox(bbox: Iterable[float], image_width: int, image_height: int) -> Tuple[int, int, int, int]:
     xmin, ymin, xmax, ymax = bbox
 
-    if xmax <= 1 and ymax <= 1:
+    max_abs = max(abs(xmin), abs(ymin), abs(xmax), abs(ymax))
+
+    if max_abs <= 1:
+        # Coordinates normalized to 0-1 range
         xmin = xmin * image_width
         xmax = xmax * image_width
         ymin = ymin * image_height
         ymax = ymax * image_height
-    elif xmax > image_width or ymax > image_height:
+    elif max_abs <= 1000:
+        # Coordinates normalized to 0-1000 range
         xmin = (xmin / 1000) * image_width
         xmax = (xmax / 1000) * image_width
         ymin = (ymin / 1000) * image_height
         ymax = (ymax / 1000) * image_height
+    # Otherwise treat as absolute pixel coordinates
 
     xmin = max(0, min(image_width, xmin))
     xmax = max(0, min(image_width, xmax))
