@@ -14,6 +14,8 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
+DPI=150
+
 client = OpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
 
 def convert_pdf_to_images(pdf_path: str, output_dir: str) -> list[str]:
@@ -28,7 +30,7 @@ def convert_pdf_to_images(pdf_path: str, output_dir: str) -> list[str]:
 
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
-        pix = page.get_pixmap()
+        pix = page.get_pixmap(dpi=DPI)
         image_filename = f"page_{page_num + 1}.png"
         image_path = os.path.join(output_dir, image_filename)
         pix.save(image_path)
