@@ -1,0 +1,7 @@
+include README.md
+include requirements.txt
+recursive-include pdf_vision_processor/templates *
+recursive-include pdf_vision_processor/static *
+recursive-include data/sample *
+global-exclude *.pyc
+global-exclude __pycache__

@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 jinja2
 python-multipart
@@ -8,3 +8,4 @@ pymupdf
 httpx
 python-dotenv
 Pillow
+tomli; python_version < "3.11"

@@ -4,7 +4,7 @@ This document outlines how a PDF document is processed within the PDF Vision Pro
 
 ## Overview
 
-The processing pipeline is triggered when a document is uploaded and processing is initiated. The core logic resides in `app/processor.py`.
+The processing pipeline is triggered when a document is uploaded and processing is initiated. The core logic resides in `pdf_vision_processor/processor.py`.
 
 ## Workflow Steps
 
@@ -15,7 +15,7 @@ The processing pipeline is triggered when a document is uploaded and processing 
 2.  **PDF Conversion**:
     *   The PDF file is opened using `pymupdf` (fitz).
     *   Each page of the PDF is converted into a PNG image.
-    *   Images are stored in a dedicated directory: `data/images/{document_id}/`.
+    *   Images are stored in a dedicated directory under the configured data root (default: `~/.pdf-vision-processor/data/images/{document_id}/`).
 
 3.  **Page Analysis (Per Page)**:
     *   The system iterates through each generated page image.
@@ -24,7 +24,7 @@ The processing pipeline is triggered when a document is uploaded and processing 
     *   The image and a specific prompt are sent to the Vision LLM (e.g., GPT-4o).
 
 4.  **LLM Interaction**:
-    *   **Prompt**: The system uses a predefined prompt from `app/prompts.py`.
+    *   **Prompt**: The system uses a predefined prompt from `pdf_vision_processor/prompts.py`.
     *   **Request**: A chat completion request is made with the `user` role containing both the text prompt and the image URL (data URI).
     *   **Response Format**: The LLM is instructed to return a valid JSON object.
 
@@ -40,7 +40,7 @@ The processing pipeline is triggered when a document is uploaded and processing 
 
 ## LLM Prompt
 
-The prompt sent to the LLM is defined in `app/prompts.py`:
+The prompt sent to the LLM is defined in `pdf_vision_processor/prompts.py`:
 
 ```python
 PAGE_ANALYSIS_PROMPT = """

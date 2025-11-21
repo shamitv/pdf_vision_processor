@@ -16,27 +16,27 @@ The PDF Vision Processor is a web application designed to ingest PDF documents, 
 
 ## 3. System Components
 
-### 3.1 API Layer (`app/routes.py`, `app/main.py`)
+### 3.1 API Layer (`pdf_vision_processor/routes.py`, `pdf_vision_processor/main.py`)
 The entry point for the application. It exposes REST endpoints for:
 *   File Upload (`POST /upload`)
 *   Processing Triggers (`POST /process/{id}`)
 *   Data Retrieval (`GET /documents`, `GET /pages/...`)
 *   Serving UI Templates and Static Files.
 
-### 3.2 Processing Engine (`app/processor.py`)
+### 3.2 Processing Engine (`pdf_vision_processor/processor.py`)
 Handles the core business logic:
 1.  **PDF Conversion**: Converts PDF pages to PNG images using PyMuPDF.
 2.  **Image Encoding**: Encodes images to Base64 for API transmission.
 3.  **LLM Interaction**: Constructs prompts and sends requests to the Vision API.
 4.  **Result Parsing**: Parses the JSON response from the LLM containing Markdown text and bounding box coordinates.
 
-### 3.3 Database Layer (`app/models.py`, `app/database.py`)
+### 3.3 Database Layer (`pdf_vision_processor/models.py`, `pdf_vision_processor/database.py`)
 Manages persistent storage using SQLite.
 *   **Document**: Stores metadata about the uploaded file and overall processing status.
 *   **Page**: Represents a single page of a document, linked to the generated image file.
 *   **PageAnalysis**: Stores the raw JSON response and extracted Markdown from the LLM.
 
-### 3.4 User Interface (`app/templates/`, `app/static/`)
+### 3.4 User Interface (`pdf_vision_processor/templates/`, `pdf_vision_processor/static/`)
 *   **List View**: Displays uploaded documents and their status.
 *   **Detail View**: A split-pane interface.
     *   **Left**: Renders the page image. JavaScript overlays `<div>` elements for bounding boxes based on the API response.
@@ -44,10 +44,10 @@ Manages persistent storage using SQLite.
 
 ## 4. Data Flow
 
-1.  **Upload**: User uploads a PDF -> Saved to `data/uploads` -> `Document` record created (Status: PENDING).
+1.  **Upload**: User uploads a PDF -> Saved to the configured data directory (defaults to `~/.pdf-vision-processor/data/uploads`) -> `Document` record created (Status: `PENDING`).
 2.  **Process Trigger**: User clicks "Process" -> Request sent to `POST /process/{id}` -> Background task started.
 3.  **Processing Pipeline**:
-    *   PDF split into images (saved to `data/images/{id}/`).
+    *   PDF split into images (saved to `<data_dir>/images/{id}/`).
     *   `Page` records created.
     *   For each page:
         *   Image sent to Vision LLM.
@@ -60,13 +60,13 @@ Manages persistent storage using SQLite.
 
 ## 5. Processing Logs
 
-Each processing run writes a structured timeline to `logs/processing/doc_{document_id}_v{version}.log`. Entries follow the format `TIMESTAMP key=value ...` and capture:
+Each processing run writes a structured timeline to `<logs_dir>/processing/doc_{document_id}_v{version}.log`. Entries follow the format `TIMESTAMP key=value ...` and capture:
 
 - Run lifecycle transitions (start, completion, failures) along with the PDF name/id and resolved version number.
 - Major pipeline stages (PDF conversion, page creation, overlay generation, persistence) and their durations or errors.
 - LLM request checkpoints including `status=sent` before the API call and completion records with latency/token metadata.
 
-These logs exist alongside the existing `logs/llm_debug` JSON payloads and provide a quick human-readable trail for operators to diagnose issues without opening raw request/response files.
+These logs exist alongside the existing `<logs_dir>/llm_debug` JSON payloads and provide a quick human-readable trail for operators to diagnose issues without opening raw request/response files.
 
 ## 6. Database Schema
 
@@ -101,18 +101,22 @@ erDiagram
 
 ```
 pdf_vision_processor/
-├── app/
-│   ├── __init__.py
-│   ├── main.py           # App entry point
-│   ├── models.py         # DB Models
-│   ├── schemas.py        # Pydantic Schemas
-│   ├── routes.py         # API Endpoints
-│   ├── processor.py      # Core Logic
-│   ├── database.py       # DB Connection
-│   ├── templates/        # HTML Templates
-│   └── static/           # CSS/JS
-├── data/                 # Storage for PDFs and Images
-├── docs/                 # Documentation
+├── pdf_vision_processor/
+│   ├── __init__.py          # Package metadata + FastAPI app factory
+│   ├── cli.py               # Console entry point (exported as pdf-vision-processor)
+│   ├── settings.py          # Layered config resolution helpers
+│   ├── main.py              # FastAPI application factory
+│   ├── routes.py            # API & UI routes
+│   ├── processor.py         # Core LLM pipeline
+│   ├── database.py          # SQLAlchemy bindings
+│   ├── templates/           # Bundled Jinja templates
+│   └── static/              # CSS/JS assets
+├── app/                     # Compatibility shims for legacy imports
+├── data/                    # Default sample fixtures (only lightweight files are packaged)
+├── docs/
 ├── requirements.txt
-└── README.md
+├── setup.py / pyproject.toml
+└── scripts/build_dist.py
 ```
+
+Static assets and templates are discovered at runtime with `importlib.resources`, ensuring they resolve correctly whether the project is executed from a local checkout or installed from PyPI. User-generated data, uploads, and logs are never packaged; they live under the configurable application home (default: `~/.pdf-vision-processor`).

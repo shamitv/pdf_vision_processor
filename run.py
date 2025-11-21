@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import os
 import sys
-import uvicorn
 from dotenv import load_dotenv
+
+from pdf_vision_processor.cli import main as cli_main
 
 def main():
     """
@@ -39,9 +40,9 @@ def main():
             else:
                 print("Warning: .venv found but python binary missing.")
     
-    # 3. Start the API
+    # 3. Start the API via the packaged CLI
     print("Starting PDF Vision Processor API...")
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    cli_main(sys.argv[1:])
 
 if __name__ == "__main__":
     main()

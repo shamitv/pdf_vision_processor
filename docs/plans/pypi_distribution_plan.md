@@ -13,15 +13,24 @@
 4. Documentation update covering installation, configuration, and server invocation for consumers.
 5. Release checklist + automation scripts for building and uploading to TestPyPI/PyPI.
 
+## Status Snapshot (2025-11-21)
+| Workstream | Status | Notes | Next Steps |
+| --- | --- | --- | --- |
+| A – Packaging/Layout | ✅ Completed | Code now ships from `pdf_vision_processor/`, legacy `app/` is a shim, `setup.py`/`pyproject.toml`/`MANIFEST.in` land, version lives in `_version.py`. | Audit sample fixtures to ensure wheel stays small; decide whether `_version.py` should export richer metadata. |
+| B – CLI/Server | ✅ Completed | `pdf-vision-processor` CLI with layered settings, `.env` loading, docs refreshed, `run.py` delegates to CLI. | Consider future subcommands (e.g., `serve`, `process-once`) after feedback. |
+| C – Testing/Validation | ⚠️ Partially done | Added unit coverage for settings + CLI; pytest workflow documented. | Add end-to-end smoke test that installs wheel in temp venv, runs CLI, and verifies `/health`; document/automate Windows coverage decision. |
+| D – Release Workflow | ⚠️ Partially done | `scripts/build_dist.py` handles bump/build/twine check; publishing checklist added. | Wire GitHub Actions for tagged builds, run TestPyPI dry run, store PyPI/TestPyPI tokens in CI secrets. |
+| E – Documentation | ✅ Completed | README + architecture/env/docs updated; publishing checklist committed. | Keep docs in sync with future extras (e.g., `[ocr]` optional deps). |
+
 ## Workstream A – Packaging & Layout
 1. **Flatten package namespace**
    - Move/alias `app` package to `pdf_vision_processor` to avoid collisions and convey ownership on PyPI.
    - Ensure `__init__.py` exposes useful top-level symbols (e.g., `create_app`).
 2. **Project metadata**
    - Maintain a `setup.py` that defines name, description, authors, license, Python version >=3.10, classifiers, URLs, and dependencies harvested from `requirements.txt`.
-   - Record `__version__ = "0.1.0"` inside `pdf_vision_processor/__init__.py`, read it from `setup.py`, and increment via the helper build script.
+   - Record `__version__ = "0.1.0"` inside `pdf_vision_processor/_version.py`, read it from `setup.py`, and increment via the helper build script.
 3. **Data files**
-   - Configure `include-package-data = true` plus `MANIFEST.in` entries for `app/static/**`, `app/templates/**`, and `data/sample/**` if needed for demos.
+   - Configure `include-package-data = true` plus `MANIFEST.in` entries for `pdf_vision_processor/static/**`, `pdf_vision_processor/templates/**`, and `data/sample/**` if needed for demos.
    - Audit large sample PDFs; ship only lightweight fixtures necessary for smoke tests.
 4. **Runtime assets**
    - Verify relative paths inside `app.main` (static mounts) still resolve when the package is installed system-wide. Use `importlib.resources.files("pdf_vision_processor.static")` to compute absolute paths at runtime.
