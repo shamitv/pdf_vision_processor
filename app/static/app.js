@@ -45,11 +45,13 @@ document.getElementById('pageList')?.addEventListener('click', (e) => {
         const pageId = link.dataset.pageId;
         const pageNum = link.dataset.pageNumber;
         const imagePath = link.dataset.imagePath;
-        loadPage(pageId, pageNum, imagePath);
+        const latency = link.dataset.latency;
+        const tokens = link.dataset.tokens;
+        loadPage(pageId, pageNum, imagePath, latency, tokens);
     }
 });
 
-async function loadPage(pageId, pageNum, imagePath) {
+async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
     document.getElementById('placeholder').style.display = 'none';
     document.getElementById('viewer').style.display = 'flex';
 

@@ -41,3 +41,12 @@
     z-index: 20;
     display: none;
 }
+
+/* Custom styles */
+.page-link-item {
+    cursor: pointer;
+}
+
+.page-link-item small {
+    font-family: monospace;
+}

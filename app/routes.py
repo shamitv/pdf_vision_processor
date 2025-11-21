@@ -38,9 +38,15 @@ def list_documents_ui(request: Request, db: Session = Depends(get_db)):
             latest_version = max(doc.versions, key=lambda v: v.version_number)
             doc_dict["status"] = latest_version.status
             doc_dict["page_count"] = latest_version.page_count
+            doc_dict["pdf_conversion_time_seconds"] = latest_version.pdf_conversion_time_seconds
+            doc_dict["total_processing_time_seconds"] = latest_version.total_processing_time_seconds
+            doc_dict["total_tokens"] = latest_version.total_tokens
         else:
             doc_dict["status"] = models.ProcessingStatus.PENDING
             doc_dict["page_count"] = 0
+            doc_dict["pdf_conversion_time_seconds"] = 0.0
+            doc_dict["total_processing_time_seconds"] = 0.0
+            doc_dict["total_tokens"] = 0
             
         docs_with_status.append(doc_dict)
     
