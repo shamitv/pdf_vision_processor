@@ -27,9 +27,11 @@ Adopt a 0–999 normalized coordinate scale for all LLM-generated bounding boxes
 - [ ] Bump static asset version in `app/templates/base.html` after changes.
 
 ### 4. Backfill / Compatibility Handling
-- [ ] Implement detection for legacy 0–1000 responses and auto-scale them to keep existing data usable.
-- [ ] Consider a one-time script to regenerate overlays for existing versions using the new scale.
-- [ ] Document how mixed-scale datasets are handled during the transition.
+- [ ] **Strategy: Heuristic Compatibility**. Treat all existing `box_2d` values as if they were already 0–999.
+  - The difference between `x/1000` and `x/999` is < 0.1%, which is visually negligible (less than 1px on most screens).
+  - No database migration or versioning column is required.
+  - Legacy data will simply be rendered with the new normalization logic.
+- [ ] Document this decision in the codebase (e.g., in `overlay.py` comments).
 
 ### 5. Validation & QA
 - [ ] Add unit tests for `_normalize_bbox` (server) and a small Jest-style test for the client normalization helper (optional, via tooling).
@@ -41,9 +43,7 @@ Adopt a 0–999 normalized coordinate scale for all LLM-generated bounding boxes
 - [ ] Note the change in release notes / changelog.
 - [ ] Monitor first processed documents post-deployment for alignment issues.
 
-## Open Questions
-- Should historic analyses be reprocessed, or do we rely on compatibility logic?
-- Do we need versioned storage for `raw_json` to denote the scale used at generation time?
+
 
 ## Definition of Done
 - All code paths expect and correctly handle 0–999 bounding boxes.

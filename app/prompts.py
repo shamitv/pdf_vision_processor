@@ -1,4 +1,3 @@
-
 PAGE_ANALYSIS_PROMPT = """
 Analyze this page image. 
 1. Extract the full text content in Markdown format.
@@ -16,6 +15,6 @@ Return a JSON object with the following structure:
         }
     ]
 }
-Note: box_2d should be normalized coordinates (0-1000).
+Note: box_2d should be normalized coordinates (0-999).
 Ensure the response is valid JSON.
 """

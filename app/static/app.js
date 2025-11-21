@@ -124,8 +124,8 @@ function renderOverlays(elements) {
             div.dataset.elementIndex = index;
 
             // Decide which scale to use for the coordinates.
-            // Many LLM responses normalise to a 0-1000 grid rather than returning
-            // absolute pixels, so detect that pattern and adjust on the fly.
+            // Many LLM responses normalise to a 0-999 grid (previously 0-1000).
+            // HEURISTIC COMPATIBILITY: Treat 0-1000 as 0-999.
             let normalizer = 'thousand';
             if (xmax <= 1 && ymax <= 1) {
                 normalizer = 'unit';
@@ -135,13 +135,13 @@ function renderOverlays(elements) {
 
             const toRelativeX = (value) => {
                 if (normalizer === 'unit') return value;
-                if (normalizer === 'thousand') return value / 1000;
+                if (normalizer === 'thousand') return value / 999;
                 return value / imageWidth;
             };
 
             const toRelativeY = (value) => {
                 if (normalizer === 'unit') return value;
-                if (normalizer === 'thousand') return value / 1000;
+                if (normalizer === 'thousand') return value / 999;
                 return value / imageHeight;
             };
 
@@ -165,7 +165,7 @@ function renderOverlays(elements) {
 
             const convertToPixels = (value, axisLength) => {
                 if (normalizer === 'unit') return value * axisLength;
-                if (normalizer === 'thousand') return (value / 1000) * axisLength;
+                if (normalizer === 'thousand') return (value / 999) * axisLength;
                 return value;
             };
 
@@ -320,11 +320,11 @@ function showBboxInfo(element, index) {
                 translatedYmin = ymin;
                 translatedYmax = ymax;
             } else {
-                normalizer = 'thousand (0-1000)';
-                translatedXmin = (xmin / 1000) * imageWidth;
-                translatedXmax = (xmax / 1000) * imageWidth;
-                translatedYmin = (ymin / 1000) * imageHeight;
-                translatedYmax = (ymax / 1000) * imageHeight;
+                normalizer = 'thousand (0-999)';
+                translatedXmin = (xmin / 999) * imageWidth;
+                translatedXmax = (xmax / 999) * imageWidth;
+                translatedYmin = (ymin / 999) * imageHeight;
+                translatedYmax = (ymax / 999) * imageHeight;
             }
         }
 
