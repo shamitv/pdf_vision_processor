@@ -55,7 +55,7 @@ def encode_image(image_path: str) -> str:
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
-def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> dict:
+def analyze_page_with_llm(image_path: str, document_id: int, page_num: int, version_number: int) -> dict:
     """
     Sends the image to the Vision LLM and returns the parsed JSON response.
     """
@@ -63,16 +63,18 @@ def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> d
     
     prompt = PAGE_ANALYSIS_PROMPT
 
-    # Ensure logs directory exists
-    logs_dir = os.path.join("logs", "llm_debug")
-    if not os.path.exists(logs_dir):
-        os.makedirs(logs_dir)
+    # Ensure logs directory exists and is versioned per processing run
+    logs_dir = os.path.join("logs", "llm_debug", f"doc_{document_id}", f"v{version_number}")
+    os.makedirs(logs_dir, exist_ok=True)
+
+    page_prefix = os.path.join(logs_dir, f"page_{page_num:03d}")
 
     # Log Request
-    request_log_path = os.path.join(logs_dir, f"doc_{document_id}_page_{page_num}_request.json")
+    request_log_path = f"{page_prefix}_request.json"
     request_data = {
         "prompt": prompt,
         "image_path": image_path,
+        "version_number": version_number,
         "timestamp": datetime.now().isoformat()
     }
     with open(request_log_path, "w") as f:
@@ -101,8 +103,22 @@ def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> d
         
         content = response.choices[0].message.content
 
+        # Log raw LLM response payload for debugging
+        raw_response_path = f"{page_prefix}_response_raw.json"
+        raw_payload = None
+        if hasattr(response, "model_dump"):
+            try:
+                raw_payload = response.model_dump()
+            except Exception as dump_err:  # pragma: no cover - defensive
+                logger.warning("Failed to serialize LLM response via model_dump: %s", dump_err)
+        if raw_payload is None:
+            # Fallback to string representation if serialization fails
+            raw_payload = {"raw": str(response)}
+        with open(raw_response_path, "w") as f:
+            json.dump(raw_payload, f, indent=2)
+
         # Log Response
-        response_log_path = os.path.join(logs_dir, f"doc_{document_id}_page_{page_num}_response.json")
+        response_log_path = f"{page_prefix}_response.json"
         with open(response_log_path, "w") as f:
             f.write(content)
 
@@ -175,7 +191,12 @@ def process_document(document_id: int, db: Session):
 
             # 3. Call LLM
             t0_llm = time.perf_counter()
-            analysis_result = analyze_page_with_llm(image_path, doc.id, page_num)
+            analysis_result = analyze_page_with_llm(
+                image_path=image_path,
+                document_id=doc.id,
+                page_num=page_num,
+                version_number=doc_version.version_number,
+            )
             t1_llm = time.perf_counter()
 
             # Generate overlay image as part of processing pipeline
