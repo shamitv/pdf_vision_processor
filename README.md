@@ -28,6 +28,8 @@ A Python application that processes PDFs using a Vision LLM (OpenAI-compatible).
     export LLM_MODEL="gpt-4o" # Optional, defaults to gpt-4o
     ```
 
+See `docs/env_config.md` for a full list of environment variables and recommended defaults.
+
 ## Running the Application
 
 Start the FastAPI server:
