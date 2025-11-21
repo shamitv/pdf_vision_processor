@@ -1,30 +1,19 @@
-# Walkthrough - Fix Coordinate Translation Logic
+# Walkthrough - Translucent Bounding Boxes
 
-## Issue
-The user reported that "Raw Coordinates (LLM)" and "Translated Coordinates (px)" were identical in the UI, even though the LLM is instructed to return normalized coordinates (0-1000).
+## Request
+The user asked for the generated overlay image to have "translucent" bounding boxes.
 
-## Investigation
-1.  **Prompt Verification**: I checked `app/prompts.py` and confirmed that the LLM is explicitly instructed to return `normalized coordinates (0-1000)`.
-2.  **Logic Flaw**: The frontend logic in `app/static/app.js` was defaulting to 'pixels' and only switching to 'thousand' (normalized) if the coordinates *exceeded* the image dimensions.
-    - For high-resolution images (e.g., A4 @ 150 DPI is ~1240x1755), valid 0-1000 coordinates are *smaller* than the image dimensions.
-    - This caused the system to incorrectly interpret normalized coordinates as pixels, resulting in no translation (and likely incorrect bounding box placement).
-
-## Solution
-I updated the coordinate detection logic in `app/static/app.js` to prioritize 'thousand' normalization.
+## Implementation
+I refactored the `generate_overlay_image` function in `app/utils/overlay.py` to use a more robust method for rendering transparency.
 
 ### Changes
 
-#### [MODIFY] [app.js](file:///Volumes/work_ext/work/pdf_vision_processor/app/static/app.js)
-Updated `renderOverlays` and `showBboxInfo` functions to:
-- Default to 'thousand' normalization (0-1000).
-- Only switch to 'pixels' if coordinates are significantly larger than 1000 (indicating they are likely absolute pixels).
-- Retain 'unit' (0-1) detection for very small values.
-
-#### [MODIFY] [base.html](file:///Volumes/work_ext/work/pdf_vision_processor/app/templates/base.html)
-- Bumped static asset version to `?v=3` to force browser cache refresh.
-- Fixed a minor syntax error in the viewport meta tag.
+#### [MODIFY] [overlay.py](file:///Volumes/work_ext/work/pdf_vision_processor/app/utils/overlay.py)
+- **Separate Overlay Layer**: Instead of drawing directly on the base image, I now create a new transparent RGBA image (`overlay`).
+- **Alpha Compositing**: I draw the filled rectangles (with alpha=60) onto this transparent layer. Then, I use `Image.alpha_composite(image, overlay)` to merge them. This ensures that the alpha blending is mathematically correct and the underlying text remains visible.
+- **Cache Invalidation**: I updated `_OVERLAY_VERSION` from `v2` to `v3`. This forces the system to regenerate the overlay images the next time they are requested, ensuring the user sees the changes immediately.
 
 ## Verification
-- The logic now correctly interprets 0-1000 coordinates as normalized values for large images.
-- If the LLM returns absolute pixels (and they are > 1000), the system will still handle them correctly.
-- The UI should now show different values for "Raw" (0-1000) and "Translated" (pixels).
+- When you view a page, the system will now generate a new overlay image (ending in `_v3.png`).
+- The bounding boxes will have a semi-transparent fill (alpha ~23%) and a solid outline.
+- Text underneath the boxes should be clearly visible.

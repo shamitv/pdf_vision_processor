@@ -8,7 +8,7 @@ _COLOR_MAP = {
     "image": (255, 140, 0, 255),  # orange
 }
 _DEFAULT_COLOR = (255, 0, 0, 255)
-_OVERLAY_VERSION = "v2"
+_OVERLAY_VERSION = "v3"
 
 
 def generate_overlay_image(image_path: str, elements: Iterable[dict]) -> str:
@@ -23,7 +23,9 @@ def generate_overlay_image(image_path: str, elements: Iterable[dict]) -> str:
     with Image.open(image_path) as base_image:
         image = base_image.convert("RGBA")
 
-    draw = ImageDraw.Draw(image, "RGBA")
+    # Create a transparent overlay layer for high-quality alpha blending
+    overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
     width, height = image.size
 
     for element in elements or []:
@@ -36,8 +38,12 @@ def generate_overlay_image(image_path: str, elements: Iterable[dict]) -> str:
             continue
 
         outline = _COLOR_MAP.get(element.get("type"), _DEFAULT_COLOR)
+        # Use a translucent fill (alpha=60)
         fill = (*outline[:3], 60)
         draw.rectangle([xmin, ymin, xmax, ymax], outline=outline, fill=fill, width=3)
+
+    # Composite the overlay onto the base image
+    image = Image.alpha_composite(image, overlay)
 
     os.makedirs(os.path.dirname(overlay_path), exist_ok=True)
     image.save(overlay_path)
