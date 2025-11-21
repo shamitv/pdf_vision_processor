@@ -9,11 +9,22 @@ from datetime import datetime
 from .prompts import PAGE_ANALYSIS_PROMPT
 from .utils.overlay import generate_overlay_image
 import time
+import logging
 
 # Configuration
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
 LLM_API_KEY = os.getenv("LLM_API_KEY")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
+
+# Make the max tokens configurable via environment variable.
+logger = logging.getLogger(__name__)
+try:
+    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
+    if LLM_MAX_TOKENS <= 0:
+        raise ValueError("LLM_MAX_TOKENS must be > 0")
+except Exception as _e:
+    logger.warning("Invalid LLM_MAX_TOKENS value, falling back to 4096: %s", _e)
+    LLM_MAX_TOKENS = 4096
 
 DPI=150
 
@@ -84,7 +95,7 @@ def analyze_page_with_llm(image_path: str, document_id: int, page_num: int) -> d
                 }
             ],
             response_format={"type": "json_object"},
-            max_tokens=4096,
+            max_tokens=LLM_MAX_TOKENS,
         )
         
         content = response.choices[0].message.content
