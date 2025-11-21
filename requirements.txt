@@ -4,8 +4,9 @@ sqlalchemy
 jinja2
 python-multipart
 openai
-pymupdf
 httpx
 python-dotenv
 Pillow
 tomli; python_version < "3.11"
+setuptools
+twine

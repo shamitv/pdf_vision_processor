@@ -12,6 +12,8 @@ pdf-vision-processor --host 0.0.0.0 --port 8080
 
 The CLI loads a `.env` file from your current working directory (if present), applies overrides from environment variables prefixed with `PDF_VISION_PROCESSOR_`, and falls back to sensible defaults. Static assets and Jinja templates are bundled inside the wheel.
 
+> **Note:** ``PyMuPDF`` (``fitz``) is expected to be available in the runtime environment (e.g., preinstalled in the platform image). The PyPI package does **not** vendor it; install `pymupdf` manually if your deployment does not already include it.
+
 ## Configuration
 
 | Setting | CLI Flag | Environment Variable | Default |
@@ -37,6 +39,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python run.py --host 127.0.0.1 --port 8000 --reload
 ```
+
+Ensure your virtual environment already has ``pymupdf`` installed (or install it manually) before running the processor locally.
 
 Assets, templates, and compatibility shims remain under the legacy `app/` namespace for existing imports, but all active code now lives inside the `pdf_vision_processor/` package (matching what ships to PyPI).
 
