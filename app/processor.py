@@ -18,13 +18,14 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o")
 
 # Make the max tokens configurable via environment variable.
 logger = logging.getLogger(__name__)
+default_max_tokens = 16384  # Example default for GPT-4o
 try:
-    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
+    LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", default_max_tokens))
     if LLM_MAX_TOKENS <= 0:
         raise ValueError("LLM_MAX_TOKENS must be > 0")
 except Exception as _e:
-    logger.warning("Invalid LLM_MAX_TOKENS value, falling back to 4096: %s", _e)
-    LLM_MAX_TOKENS = 4096
+    logger.warning("Invalid LLM_MAX_TOKENS value, falling back to %d: %s", default_max_tokens, _e)
+    LLM_MAX_TOKENS = default_max_tokens
 
 DPI=150
 
