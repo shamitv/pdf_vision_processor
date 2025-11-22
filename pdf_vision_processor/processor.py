@@ -151,6 +151,7 @@ def analyze_page_with_llm(
             ],
             response_format={"type": "json_object"},
             max_tokens=LLM_MAX_TOKENS,
+            #max_completion_tokens=LLM_MAX_TOKENS,
         )
         
         content = response.choices[0].message.content

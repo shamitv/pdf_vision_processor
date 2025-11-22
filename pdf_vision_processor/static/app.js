@@ -56,11 +56,25 @@ async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
     document.getElementById('viewer').style.display = 'flex';
 
     // Update image
-    // Fix image path: remove 'data/' prefix if present in DB path because we mount 'data' at /data
-    // Actually, DB path is like 'data/images/1/page_1.png'. 
-    // We mounted 'data' directory at '/data'. So '/data/images/1/page_1.png' should work if we prepend '/'
+    // Resolve filesystem or DB image paths into the mounted '/data' URL.
+    // Common stored formats:
+    // - Absolute filesystem: '/Users/.../data/images/...'
+    // - Relative DB path: 'data/images/...'
+    // We mount the app's data directory at '/data', so prefer the '/data/...' URL.
     const img = document.getElementById('pageImage');
-    img.src = '/' + imagePath;
+    let resolvedSrc = imagePath || '';
+    // If the stored path contains '/data/', use that suffix as the URL root
+    const dataIdx = resolvedSrc.indexOf('/data/');
+    if (dataIdx !== -1) {
+        resolvedSrc = resolvedSrc.substring(dataIdx);
+    } else if (resolvedSrc.startsWith('data/')) {
+        // relative path stored as 'data/...' -> prepend '/'
+        resolvedSrc = '/' + resolvedSrc;
+    } else if (!resolvedSrc.startsWith('/')) {
+        // fallback: make it an absolute URL path
+        resolvedSrc = '/' + resolvedSrc;
+    }
+    img.src = resolvedSrc;
 
     // Clear overlays and markdown
     const overlays = document.getElementById('overlays');
@@ -81,8 +95,8 @@ async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
 
             if (data.raw_json) {
                 const analysis = JSON.parse(data.raw_json);
-                renderOverlays(analysis.elements);
-                loadOverlayPreview(pageId);
+                    renderOverlays(analysis.elements);
+                    loadOverlayPreview(pageId, resolvedSrc);
             }
         } else {
             document.getElementById('markdownContent').textContent = 'Analysis not available yet.';
@@ -257,7 +271,7 @@ function resetOverlayPreview() {
     }
 }
 
-function loadOverlayPreview(pageId) {
+function loadOverlayPreview(pageId, baseImageSrc) {
     const overlayCard = document.getElementById('overlayPreviewCard');
     const overlayImage = document.getElementById('overlayPreviewImage');
     const overlayPlaceholder = document.getElementById('overlayPreviewPlaceholder');
@@ -270,17 +284,38 @@ function loadOverlayPreview(pageId) {
     }
 
     const timestamp = Date.now();
+
     overlayImage.onload = () => {
         if (overlayCard) overlayCard.style.display = 'block';
         if (overlayPlaceholder) overlayPlaceholder.style.display = 'none';
     };
+
     overlayImage.onerror = () => {
+        // If the direct overlay file isn't available, fall back to the overlay-generation route
+        if (!overlayImage.dataset.fallback) {
+            overlayImage.dataset.fallback = '1';
+            overlayImage.src = `/pages/${pageId}/overlay-image?t=${timestamp}`;
+            return;
+        }
         if (overlayCard) overlayCard.style.display = 'none';
         if (overlayPlaceholder) {
             overlayPlaceholder.style.display = 'block';
             overlayPlaceholder.textContent = 'Overlay preview not available for this page.';
         }
     };
+
+    // Prefer the cached overlay image next to the base image (e.g. '/data/.../page_001_overlay_v4.png')
+    if (baseImageSrc) {
+        // Try to append the overlay suffix before the extension
+        const m = baseImageSrc.match(/(.*)\.(png|jpg|jpeg)$/i);
+        if (m) {
+            const overlayCandidate = `${m[1]}_overlay_v4.${m[2]}?t=${timestamp}`;
+            overlayImage.src = overlayCandidate;
+            return;
+        }
+    }
+
+    // Fallback to the server route which will generate/return the overlay
     overlayImage.src = `/pages/${pageId}/overlay-image?t=${timestamp}`;
 }
 
