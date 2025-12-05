@@ -95,8 +95,8 @@ async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
 
             if (data.raw_json) {
                 const analysis = JSON.parse(data.raw_json);
-                    renderOverlays(analysis.elements);
-                    loadOverlayPreview(pageId, resolvedSrc);
+                renderOverlays(analysis.elements);
+                loadOverlayPreview(pageId, resolvedSrc);
             }
         } else {
             document.getElementById('markdownContent').textContent = 'Analysis not available yet.';
@@ -417,3 +417,93 @@ function closeBboxInfo() {
     document.querySelectorAll('.bbox').forEach(b => b.classList.remove('bbox-selected'));
 }
 
+
+
+// Check for failures and populate list
+async function checkFailures() {
+    const versionSelect = document.getElementById('versionSelect');
+    if (!versionSelect) return;
+
+    // Parse version ID from URL or select
+    const urlParams = new URLSearchParams(window.location.search);
+    const versionId = urlParams.get('version_id') || versionSelect.value;
+
+    // Need document ID too... assume embedded in template or parse from URL
+    // URL pattern: /documents/{id}
+    const pathParts = window.location.pathname.split('/');
+    const docId = pathParts[2]; // /documents/5 -> 5
+
+    if (!docId || !versionId) return;
+
+    try {
+        const response = await fetch(`/documents/${docId}/versions/${versionId}/failures`);
+        if (response.ok) {
+            const failures = await response.json();
+            const section = document.getElementById('failedPagesSection');
+            const list = document.getElementById('failedPagesList');
+
+            if (failures.length > 0) {
+                section.style.display = 'block';
+                list.innerHTML = failures.map(f => `
+                    <div class="col-md-3 mb-2">
+                        <div class="form-check">
+                            <input class="form-check-input failed-page-checkbox" type="checkbox" value="${f.id}" id="fail-${f.id}" checked>
+                            <label class="form-check-label" for="fail-${f.id}">
+                                Page ${f.page_number}
+                                <i class="bi bi-info-circle text-danger" title="${f.error_message}"></i>
+                            </label>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                section.style.display = 'none';
+            }
+        }
+    } catch (e) {
+        console.error("Error checking failures:", e);
+    }
+}
+
+async function reprocessSelectedPages() {
+    const checkboxes = document.querySelectorAll('.failed-page-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Please select at least one page to re-process.');
+        return;
+    }
+
+    const pageIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+    const versionSelect = document.getElementById('versionSelect');
+    const urlParams = new URLSearchParams(window.location.search);
+    const versionId = urlParams.get('version_id') || versionSelect.value;
+    const pathParts = window.location.pathname.split('/');
+    const docId = pathParts[2];
+
+    if (!confirm(`Re-process ${pageIds.length} pages?`)) return;
+
+    try {
+        const response = await fetch(`/documents/${docId}/versions/${versionId}/reprocess`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ page_ids: pageIds })
+        });
+
+        if (response.ok) {
+            alert('Reprocessing started. Logs will update in the background. Refresh shortly to see results.');
+            // Ideally reload or poll
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Failed to trigger reprocessing');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Error triggering reprocessing');
+    }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+    checkFailures();
+});

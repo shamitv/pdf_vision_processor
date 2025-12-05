@@ -48,6 +48,8 @@ class Page(Base):
     document_version_id = Column(Integer, ForeignKey("document_versions.id"))
     page_number = Column(Integer)
     image_path = Column(String)
+    status = Column(Enum(ProcessingStatus), default=ProcessingStatus.PENDING)
+    error_message = Column(Text, nullable=True)
     
     # Telemetry
     llm_latency_seconds = Column(Float, default=0.0)

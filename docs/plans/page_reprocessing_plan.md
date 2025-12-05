@@ -19,6 +19,8 @@
    - Operator can re-process all failed pages or a selected subset.
    - Avoid re-processing pages already in `succeeded` state unless explicitly forced.
    - Support retry limits/backoff to prevent hot-looping on persistent failures.
+   - **Page Processing Retry Logic**: Implement a `max-retry` mechanism (default 3) for the LLM analysis step to handle transient failures during both initial processing and re-processing.
+   - **Coverage for Untried Pages**: The re-processing logic generally targets "failed" pages, but must also pick up "pending" or "untried" pages (e.g., if a previous run crashed midway).
 3. **Idempotency & Consistency**
    - Re-processing a page replaces or supersedes its prior failed analysis/overlay records without duplication.
    - Concurrency-safe: two overlapping reprocess requests should not double-run the same page.
@@ -56,6 +58,8 @@
   - Add a "retry mode" path that:
     - Skips PDF→image conversion when assets exist.
     - Reuses the existing per-page pipeline; ensures idempotent writes (update existing analysis/overlay rows/files).
+    - **Retry Wrapper**: In `analyze_page_with_llm`, wrap the API call in a loop with `max_retries` (default 3). 
+    - **Handling Partial Runs**: Ensure the "reprocess" identifier can select pages that are effectively "missing" (no analysis record) in addition to those marked "failed".
     - Guards against concurrent reprocessing of the same page (e.g., DB row-level lock or in-flight flag).
   - Respect retry policies (max attempts/backoff). Persist attempt metadata.
 - **Tasking/Queueing** (if applicable)
@@ -81,6 +85,10 @@
 - API: endpoints return correct counts and respect filtering; reprocess request enqueues only failed pages.
 - UI: selecting failed pages triggers API call; statuses refresh and reflect completion/failure; banner hides when all pages succeed.
 - Integration/manual: simulate a run with deliberate failures (e.g., 30/100) and verify only those 30 get retried and resolved.
+- **Specific Test Case**:
+  - Test with **Document ID 5, Version ID 9** via the UI.
+  - specifically verify pages **58, 62, 64, 76** which previously failed.
+  - Verify that pages after 76 (which were likely not tried) are also picked up and processed correctly.
 
 ## Rollout Notes
 - Backfill not required, but consider initializing legacy pages with `processing_status` = `succeeded` where analysis exists, else `failed`.
