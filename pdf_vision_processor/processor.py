@@ -104,9 +104,11 @@ def analyze_page_with_llm(
     page_num: int,
     version_number: int,
     processing_log: "ProcessingRunLogger | None" = None,
+    max_retries: int = 3,
 ) -> dict:
     """
     Sends the image to the Vision LLM and returns the parsed JSON response.
+    Retries up to `max_retries` times on failure.
     """
     base64_image = encode_image(image_path)
     
@@ -132,65 +134,204 @@ def analyze_page_with_llm(
     if processing_log:
         processing_log.log(page=page_num, step="llm_request", status="sent", model=LLM_MODEL)
 
-    try:
-        response = client.chat.completions.create(
-            model=LLM_MODEL,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}"
+    last_exception = None
+    
+    for attempt in range(max_retries):
+        try:
+            if processing_log:
+                processing_log.log(
+                    page=page_num, 
+                    step="llm_request", 
+                    status="attempt_start", 
+                    attempt=attempt + 1, 
+                    max_retries=max_retries
+                )
+
+            response = client.chat.completions.create(
+                model=LLM_MODEL,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                },
                             },
-                        },
-                    ],
-                }
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=LLM_MAX_TOKENS,
-            #max_completion_tokens=LLM_MAX_TOKENS,
-        )
-        
-        content = response.choices[0].message.content
-
-        # Log raw LLM response payload for debugging
-        raw_response_path = f"{page_prefix}_response_raw.json"
-        raw_payload = None
-        if hasattr(response, "model_dump"):
-            try:
-                raw_payload = response.model_dump()
-            except Exception as dump_err:  # pragma: no cover - defensive
-                logger.warning("Failed to serialize LLM response via model_dump: %s", dump_err)
-        if raw_payload is None:
-            # Fallback to string representation if serialization fails
-            raw_payload = {"raw": str(response)}
-        with open(raw_response_path, "w") as f:
-            json.dump(raw_payload, f, indent=2)
-
-        # Log Response
-        response_log_path = f"{page_prefix}_response.json"
-        with open(response_log_path, "w") as f:
-            f.write(content)
-
-        result = json.loads(content)
-        
-        # Add usage metadata if available
-        if hasattr(response, 'usage') and response.usage:
-            result['_usage'] = {
-                'total_tokens': response.usage.total_tokens,
-                'prompt_tokens': response.usage.prompt_tokens,
-                'completion_tokens': response.usage.completion_tokens
-            }
+                        ],
+                    }
+                ],
+                response_format={"type": "json_object"},
+                max_tokens=LLM_MAX_TOKENS,
+                #max_completion_tokens=LLM_MAX_TOKENS,
+            )
             
-        return result
-    except Exception as e:
+            content = response.choices[0].message.content
+
+            # Log raw LLM response payload for debugging
+            raw_response_path = f"{page_prefix}_response_raw.json"
+            raw_payload = None
+            if hasattr(response, "model_dump"):
+                try:
+                    raw_payload = response.model_dump()
+                except Exception as dump_err:  # pragma: no cover - defensive
+                    logger.warning("Failed to serialize LLM response via model_dump: %s", dump_err)
+            if raw_payload is None:
+                # Fallback to string representation if serialization fails
+                raw_payload = {"raw": str(response)}
+            with open(raw_response_path, "w") as f:
+                json.dump(raw_payload, f, indent=2)
+
+            # Log Response
+            response_log_path = f"{page_prefix}_response.json"
+            with open(response_log_path, "w") as f:
+                f.write(content)
+
+            result = json.loads(content)
+            
+            # Add usage metadata if available
+            if hasattr(response, 'usage') and response.usage:
+                result['_usage'] = {
+                    'total_tokens': response.usage.total_tokens,
+                    'prompt_tokens': response.usage.prompt_tokens,
+                    'completion_tokens': response.usage.completion_tokens
+                }
+                
+            return result
+
+        except Exception as e:
+            last_exception = e
+            logging.warning(
+                "LLM attempt %d/%d failed for doc %d page %d: %s", 
+                attempt + 1, max_retries, document_id, page_num, e
+            )
+            if processing_log:
+                processing_log.log(
+                    page=page_num, 
+                    step="llm_request", 
+                    status="attempt_failed", 
+                    error=str(e), 
+                    attempt=attempt + 1
+                )
+            
+            # Simple backoff: wait 2^attempt seconds (1, 2, 4...)
+            if attempt < max_retries - 1:
+                sleep_time = 2 * (attempt + 1)
+                time.sleep(sleep_time)
+
+    # If we fall through the loop, we failed all retries
+    error_msg = f"Failed after {max_retries} attempts. Last error: {last_exception}"
+    if processing_log:
+        processing_log.log(page=page_num, step="llm_request", status="failed", error=error_msg)
+    print(f"Error calling LLM for doc {document_id} page {page_num}: {error_msg}")
+    return {"markdown": "", "elements": [], "error": error_msg}
+
+
+def _process_single_page(
+    page: models.Page,
+    document_id: int,
+    version_number: int,
+    db: Session,
+    processing_log: "ProcessingRunLogger | None" = None,
+    max_retries: int = 3,
+):
+    """
+    Process a single page: LLM analysis -> Overlay -> Persistence.
+    Updates page status and error fields.
+    """
+    page.status = models.ProcessingStatus.PROCESSING
+    db.commit()
+
+    try:
+        # 3. Call LLM
+        t0_llm = time.perf_counter()
+        analysis_result = analyze_page_with_llm(
+            image_path=page.image_path,
+            document_id=document_id,
+            page_num=page.page_number,
+            version_number=version_number,
+            processing_log=processing_log,
+            max_retries=max_retries
+        )
+        t1_llm = time.perf_counter()
+        usage = analysis_result.get('_usage', {})
         if processing_log:
-            processing_log.log(page=page_num, step="llm_request", status="error", error=str(e))
-        print(f"Error calling LLM: {e}")
-        return {"markdown": "", "elements": [], "error": str(e)}
+            processing_log.log(
+                page=page.page_number,
+                step="llm_request",
+                status="complete",
+                latency_seconds=round(t1_llm - t0_llm, 4),
+                tokens_total=usage.get('total_tokens', 0),
+                tokens_prompt=usage.get('prompt_tokens', 0),
+                tokens_completion=usage.get('completion_tokens', 0),
+            )
+
+        # Generate overlay image as part of processing pipeline
+        t0_post = time.perf_counter()
+        try:
+            generate_overlay_image(page.image_path, analysis_result.get("elements") or [])
+            if processing_log:
+                processing_log.log(page=page.page_number, step="overlay", status="complete")
+        except Exception as overlay_error:
+            if processing_log:
+                processing_log.log(page=page.page_number, step="overlay", status="error", error=str(overlay_error))
+            print(f"Overlay generation failed for doc {document_id} page {page.page_number}: {overlay_error}")
+        
+        # 4. Store Analysis (Create or Update)
+        # Check if analysis exists
+        if page.analysis:
+            page.analysis.markdown_text = analysis_result.get("markdown", "")
+            page.analysis.raw_json = json.dumps(analysis_result)
+            page.analysis.created_at = datetime.utcnow()
+        else:
+            analysis = models.PageAnalysis(
+                page_id=page.id,
+                markdown_text=analysis_result.get("markdown", ""),
+                raw_json=json.dumps(analysis_result)
+            )
+            db.add(analysis)
+        
+        # Update Page Telemetry & Status
+        page.llm_latency_seconds = t1_llm - t0_llm
+        page.token_count = usage.get('total_tokens', 0)
+        
+        t1_post = time.perf_counter()
+        page.post_process_time_seconds = t1_post - t0_post
+        
+        page.status = models.ProcessingStatus.COMPLETED
+        page.error_message = None # Clear any previous error
+        
+        db.commit()
+        if processing_log:
+            processing_log.log(
+                page=page.page_number,
+                step="analysis_persist",
+                status="complete",
+                page_id=page.id,
+                token_count=page.token_count,
+                post_process_seconds=round(page.post_process_time_seconds, 4),
+            )
+            
+    except Exception as page_error:
+        # Log error but continue to next page so one bad page doesn't crash the whole run
+        error_msg = str(page_error)
+        # error_msg = f"Failed to process page {page.page_number}: {page_error}" # Keep simpler for DB
+        print(f"Failed to process page {page.page_number}: {error_msg}")
+        logger.error(f"Failed to process page {page.page_number}: {error_msg}")
+        
+        page.status = models.ProcessingStatus.FAILED
+        page.error_message = error_msg
+        db.commit()
+        
+        if processing_log:
+            processing_log.log(
+                page=page.page_number,
+                step="page_processing",
+                status="failed",
+                error=error_msg
+            )
 
 def process_document(document_id: int, db: Session):
     """
@@ -253,7 +394,8 @@ def process_document(document_id: int, db: Session):
             page = models.Page(
                 document_version_id=doc_version.id,
                 page_number=page_num,
-                image_path=image_path
+                image_path=image_path,
+                status=models.ProcessingStatus.PENDING 
             )
             db.add(page)
             db.commit() # Commit to get page.id
@@ -261,68 +403,12 @@ def process_document(document_id: int, db: Session):
             if processing_log:
                 processing_log.log(page=page_num, step="page_record", status="created", page_id=page.id)
 
-            # 3. Call LLM
-            t0_llm = time.perf_counter()
-            analysis_result = analyze_page_with_llm(
-                image_path=image_path,
-                document_id=doc.id,
-                page_num=page_num,
-                version_number=doc_version.version_number,
-                processing_log=processing_log,
-            )
-            t1_llm = time.perf_counter()
-            usage = analysis_result.get('_usage', {})
-            if processing_log:
-                processing_log.log(
-                    page=page_num,
-                    step="llm_request",
-                    status="complete",
-                    latency_seconds=round(t1_llm - t0_llm, 4),
-                    tokens_total=usage.get('total_tokens', 0),
-                    tokens_prompt=usage.get('prompt_tokens', 0),
-                    tokens_completion=usage.get('completion_tokens', 0),
-                )
-
-            # Generate overlay image as part of processing pipeline
-            t0_post = time.perf_counter()
-            try:
-                generate_overlay_image(image_path, analysis_result.get("elements") or [])
-                if processing_log:
-                    processing_log.log(page=page_num, step="overlay", status="complete")
-            except Exception as overlay_error:
-                if processing_log:
-                    processing_log.log(page=page_num, step="overlay", status="error", error=str(overlay_error))
-                print(f"Overlay generation failed for doc {document_id} page {page_num}: {overlay_error}")
+            # Delegate to helper
+            _process_single_page(page, doc.id, doc_version.version_number, db, processing_log)
             
-            # 4. Store Analysis
-            analysis = models.PageAnalysis(
-                page_id=page.id,
-                markdown_text=analysis_result.get("markdown", ""),
-                raw_json=json.dumps(analysis_result)
-            )
-            db.add(analysis)
-            
-            # Update Page Telemetry
-            page.llm_latency_seconds = t1_llm - t0_llm
-            
-            page.token_count = usage.get('total_tokens', 0)
-            
-            # Accumulate version totals
-            doc_version.total_tokens += page.token_count
-            
-            t1_post = time.perf_counter()
-            page.post_process_time_seconds = t1_post - t0_post
-            
-            db.commit()
-            if processing_log:
-                processing_log.log(
-                    page=page_num,
-                    step="analysis_persist",
-                    status="complete",
-                    page_id=page.id,
-                    token_count=page.token_count,
-                    post_process_seconds=round(page.post_process_time_seconds, 4),
-                )
+            # Accumulate version totals (refresh doc_version to be safe?)
+            if page.status == models.ProcessingStatus.COMPLETED:
+                doc_version.total_tokens += page.token_count
 
         doc_version.status = models.ProcessingStatus.COMPLETED
         doc_version.total_processing_time_seconds = time.perf_counter() - t0_conversion # approx total time since start
@@ -344,4 +430,50 @@ def process_document(document_id: int, db: Session):
         if processing_log:
             processing_log.log(event="run_complete", status="failed", error=str(e))
         print(f"Processing failed for doc {document_id}: {e}")
+
+def reprocess_pages(document_id: int, version_id: int, page_ids: list[int], db: Session):
+    """
+    Re-processes specific pages for an existing document version.
+    """
+    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+    doc_version = db.query(models.DocumentVersion).filter(models.DocumentVersion.id == version_id).first()
+    
+    if not doc or not doc_version:
+        print(f"Document {document_id} or Version {version_id} not found for reprocessing")
+        return
+
+    processing_log = ProcessingRunLogger(doc.id, doc_version.version_number)
+    processing_log.log(event="reprocess_start", page_count=len(page_ids))
+
+    try:
+        # Determine pages to process
+        if not page_ids:
+            # If empty list, reprocess ALL failed pages? Or assume caller provides list. 
+            # For robustness, let's query failed pages if list is empty.
+            pages = db.query(models.Page).filter(
+                models.Page.document_version_id == version_id,
+                models.Page.status == models.ProcessingStatus.FAILED
+            ).all()
+        else:
+            pages = db.query(models.Page).filter(
+                models.Page.id.in_(page_ids),
+                models.Page.document_version_id == version_id
+            ).all()
+
+        for page in pages:
+            _process_single_page(page, doc.id, doc_version.version_number, db, processing_log)
+            # Note: We don't update doc_version totals here yet, might be tricky with reprocessing. 
+            # Ideally we'd recalculate totals from all pages at the end.
+
+        # Recalculate version totals
+        all_pages = db.query(models.Page).filter(models.Page.document_version_id == version_id).all()
+        doc_version.total_tokens = sum(p.token_count for p in all_pages)
+        db.commit()
+
+        processing_log.log(event="reprocess_complete")
+
+    except Exception as e:
+        print(f"Reprocessing failed for doc {document_id} version {version_id}: {e}")
+        processing_log.log(event="reprocess_failed", error=str(e))
+
 

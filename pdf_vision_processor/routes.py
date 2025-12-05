@@ -159,3 +159,42 @@ def get_page_overlay_image(page_id: int, db: Session = Depends(get_db)):
     elements = analysis_payload.get("elements") or []
     overlay_path = generate_overlay_image(page.image_path, elements)
     return FileResponse(overlay_path)
+
+@router.get("/documents/{document_id}/versions/{version_id}/failures")
+def get_failed_pages(document_id: int, version_id: int, db: Session = Depends(get_db)):
+    pages = db.query(models.Page).filter(
+        models.Page.document_version_id == version_id,
+        models.Page.status == models.ProcessingStatus.FAILED
+    ).all()
+    
+    return [
+        {
+            "id": p.id,
+            "page_number": p.page_number,
+            "error_message": p.error_message
+        }
+        for p in pages
+    ]
+
+@router.post("/documents/{document_id}/versions/{version_id}/reprocess")
+def reprocess_pages_endpoint(
+    document_id: int, 
+    version_id: int, 
+    payload: dict, # Expect {"page_ids": [...]}
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+        
+    page_ids = payload.get("page_ids", [])
+    
+    background_tasks.add_task(
+        processor.reprocess_pages, 
+        document_id, 
+        version_id, 
+        page_ids, 
+        database.SessionLocal()
+    )
+    return {"message": "Reprocessing started"}
