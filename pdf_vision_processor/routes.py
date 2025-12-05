@@ -198,3 +198,37 @@ def reprocess_pages_endpoint(
         database.SessionLocal()
     )
     return {"message": "Reprocessing started"}
+
+
+@router.get("/documents/{document_id}/versions/{version_id}/pages/status")
+def get_page_statuses(document_id: int, version_id: int, db: Session = Depends(get_db)):
+    version = db.query(models.DocumentVersion).filter(
+        models.DocumentVersion.id == version_id,
+        models.DocumentVersion.document_id == document_id
+    ).first()
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+
+    pages = db.query(models.Page).filter(models.Page.document_version_id == version_id).all()
+    payload = {
+        "document_id": document_id,
+        "version_id": version_id,
+        "version_status": version.status,
+        "page_count": version.page_count,
+        "pages": []
+    }
+
+    for p in pages:
+        payload["pages"].append(
+            {
+                "id": p.id,
+                "page_number": p.page_number,
+                "status": p.status,
+                "image_path": p.image_path,
+                "token_count": p.token_count,
+                "llm_latency_seconds": p.llm_latency_seconds,
+                "error_message": p.error_message,
+            }
+        )
+
+    return payload

@@ -49,6 +49,8 @@ const overlayContext = {
     baseImageSrc: null
 };
 
+let pageStatusPoller = null;
+
 function updateUrlWithPage(pageNumber) {
     const url = new URL(window.location.href);
     url.searchParams.set('page', pageNumber);
@@ -75,6 +77,106 @@ function syncControls(pageNumber) {
 
     const controls = document.getElementById('pageControls');
     if (controls) controls.style.display = selectionState.maxPage > 0 ? 'flex' : 'none';
+}
+
+function updatePageMeta(link, pageData) {
+    let metaEl = link.querySelector('.page-meta');
+    if (!metaEl) {
+        metaEl = document.createElement('small');
+        metaEl.className = 'text-muted page-meta';
+        metaEl.style.fontSize = '0.75em';
+        link.querySelector('.d-flex')?.appendChild(metaEl);
+    }
+
+    const status = pageData.status || 'pending';
+    const tokens = Number(pageData.token_count || 0);
+    const latency = Number(pageData.llm_latency_seconds || 0);
+
+    let text = status;
+    if (status === 'completed' && tokens > 0) {
+        text = `${latency.toFixed(1)}s | ${tokens}t`;
+    } else if (status === 'failed') {
+        text = 'failed';
+    } else if (status === 'processing') {
+        text = 'processing';
+    } else if (status === 'pending') {
+        text = 'pending';
+    }
+
+    metaEl.textContent = text;
+}
+
+function updatePageLinkFromStatus(pageData) {
+    const link = document.querySelector(`.page-link-item[data-page-number="${pageData.page_number}"]`);
+    if (!link) return;
+
+    const isReady = pageData.status === 'completed';
+
+    link.dataset.pageId = pageData.id || '';
+    link.dataset.imagePath = pageData.image_path || '';
+    link.dataset.latency = pageData.llm_latency_seconds ?? '';
+    link.dataset.tokens = pageData.token_count ?? '';
+    link.dataset.status = pageData.status || '';
+    link.dataset.pending = isReady ? 'false' : 'true';
+
+    link.classList.toggle('disabled', !isReady);
+    link.classList.toggle('pending-page', !isReady);
+
+    updatePageMeta(link, pageData);
+
+    if (selectionState.currentPageNumber === pageData.page_number && selectionState.currentPageId === null && isReady) {
+        handlePageSelection(pageData.page_number, { updateUrl: false });
+    }
+}
+
+function updatePageListFromStatus(payload) {
+    if (!payload) return;
+    if (payload.page_count) {
+        selectionState.maxPage = payload.page_count;
+        if (selectionState.currentPageNumber) syncControls(selectionState.currentPageNumber);
+    }
+
+    const pages = payload.pages || [];
+    pages.forEach(updatePageLinkFromStatus);
+}
+
+async function pollPageStatuses() {
+    const meta = document.getElementById('pageData');
+    if (!meta) return;
+    const docId = meta.dataset.documentId;
+    const versionId = meta.dataset.versionId;
+    if (!docId || !versionId) return;
+
+    try {
+        const resp = await fetch(`/documents/${docId}/versions/${versionId}/pages/status`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        updatePageListFromStatus(data);
+
+        const versionDone = data.version_status && data.version_status !== 'processing';
+        const pendingLeft = document.querySelector('.page-link-item[data-pending="true"]');
+        if (versionDone && !pendingLeft && pageStatusPoller) {
+            clearInterval(pageStatusPoller);
+            pageStatusPoller = null;
+        }
+    } catch (err) {
+        console.error('Failed polling page status', err);
+    }
+}
+
+function startPageStatusPolling() {
+    const meta = document.getElementById('pageData');
+    if (!meta) return;
+    const versionStatus = meta.dataset.versionStatus;
+    const hasPending = !!document.querySelector('.page-link-item[data-pending="true"]');
+
+    if (versionStatus !== 'processing' && !hasPending) return;
+
+    if (pageStatusPoller) return;
+
+    // kick off immediately then on interval
+    pollPageStatuses();
+    pageStatusPoller = setInterval(pollPageStatuses, 5000);
 }
 
 function showPendingPage(pageNumber) {
@@ -629,4 +731,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigationControls();
     hydrateInitialPageSelection();
     checkFailures();
+    startPageStatusPolling();
 });
