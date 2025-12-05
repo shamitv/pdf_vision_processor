@@ -50,3 +50,27 @@
 .page-link-item small {
     font-family: monospace;
 }
+
+#pageList {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+@media (max-width: 992px) {
+    #pageList {
+        max-height: calc(100vh - 160px);
+    }
+}
+
+.pending-page {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.pending-page.active {
+    background-color: #f8f9fa;
+}
+
+#pageControls {
+    gap: 1rem;
+}

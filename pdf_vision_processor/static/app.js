@@ -37,23 +37,105 @@ document.getElementById('uploadForm')?.addEventListener('submit', async (e) => {
     }
 });
 
+// Shared state for page selection and overlay context
+const selectionState = {
+    currentPageNumber: null,
+    currentPageId: null,
+    maxPage: parseInt(document.getElementById('pageSelect')?.dataset.maxPage || '0', 10)
+};
+
+const overlayContext = {
+    pageId: null,
+    baseImageSrc: null
+};
+
+function updateUrlWithPage(pageNumber) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('page', pageNumber);
+    window.history.replaceState({}, '', url);
+}
+
+function setActivePageLink(pageNumber) {
+    document.querySelectorAll('.page-link-item').forEach(link => {
+        const isActive = parseInt(link.dataset.pageNumber, 10) === pageNumber;
+        link.classList.toggle('active', isActive);
+    });
+}
+
+function syncControls(pageNumber) {
+    const dropdown = document.getElementById('pageSelect');
+    if (dropdown) dropdown.value = String(pageNumber);
+
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    if (prevBtn) prevBtn.disabled = pageNumber <= 1;
+    if (nextBtn) nextBtn.disabled = selectionState.maxPage ? pageNumber >= selectionState.maxPage : false;
+
+    setActivePageLink(pageNumber);
+
+    const controls = document.getElementById('pageControls');
+    if (controls) controls.style.display = selectionState.maxPage > 0 ? 'flex' : 'none';
+}
+
+function showPendingPage(pageNumber) {
+    const placeholder = document.getElementById('placeholder');
+    const viewer = document.getElementById('viewer');
+    if (viewer) viewer.style.display = 'none';
+    if (placeholder) {
+        placeholder.style.display = 'block';
+        placeholder.textContent = `Page ${pageNumber} has not been processed yet.`;
+    }
+    resetOverlayPreview();
+}
+
+function handlePageSelection(pageNumber, { updateUrl = true } = {}) {
+    const link = document.querySelector(`.page-link-item[data-page-number="${pageNumber}"]`);
+    if (!link) return;
+
+    const isPending = link.dataset.pending === 'true' || !link.dataset.pageId;
+    const pageId = link.dataset.pageId;
+    const imagePath = link.dataset.imagePath;
+    const latency = link.dataset.latency;
+    const tokens = link.dataset.tokens;
+
+    selectionState.currentPageNumber = pageNumber;
+    selectionState.currentPageId = isPending ? null : pageId;
+
+    syncControls(pageNumber);
+    if (updateUrl) updateUrlWithPage(pageNumber);
+
+    if (isPending) {
+        showPendingPage(pageNumber);
+        return;
+    }
+
+    loadPage(pageId, pageNumber, imagePath, latency, tokens);
+}
+
+function hydrateInitialPageSelection() {
+    const url = new URL(window.location.href);
+    const requestedPage = parseInt(url.searchParams.get('page') || '0', 10);
+    const firstLink = document.querySelector('.page-link-item');
+    const fallbackPage = firstLink ? parseInt(firstLink.dataset.pageNumber, 10) : null;
+    const initialPage = !isNaN(requestedPage) && requestedPage > 0 ? requestedPage : fallbackPage;
+    if (initialPage) handlePageSelection(initialPage, { updateUrl: !!requestedPage });
+}
+
 // Event delegation for page links
 document.getElementById('pageList')?.addEventListener('click', (e) => {
     const link = e.target.closest('.page-link-item');
     if (link) {
         e.preventDefault();
-        const pageId = link.dataset.pageId;
-        const pageNum = link.dataset.pageNumber;
-        const imagePath = link.dataset.imagePath;
-        const latency = link.dataset.latency;
-        const tokens = link.dataset.tokens;
-        loadPage(pageId, pageNum, imagePath, latency, tokens);
+        const pageNum = parseInt(link.dataset.pageNumber, 10);
+        handlePageSelection(pageNum);
     }
 });
 
 async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
-    document.getElementById('placeholder').style.display = 'none';
-    document.getElementById('viewer').style.display = 'flex';
+    const placeholder = document.getElementById('placeholder');
+    const viewer = document.getElementById('viewer');
+    if (placeholder) placeholder.style.display = 'none';
+    if (viewer) viewer.style.display = 'flex';
 
     // Update image
     // Resolve filesystem or DB image paths into the mounted '/data' URL.
@@ -84,6 +166,8 @@ async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
     // Hide bbox info panel
     document.getElementById('bboxInfo').style.display = 'none';
 
+    overlayContext.pageId = pageId;
+    overlayContext.baseImageSrc = resolvedSrc;
     resetOverlayPreview();
 
     // Fetch analysis
@@ -96,7 +180,10 @@ async function loadPage(pageId, pageNum, imagePath, latency, tokens) {
             if (data.raw_json) {
                 const analysis = JSON.parse(data.raw_json);
                 renderOverlays(analysis.elements);
-                loadOverlayPreview(pageId, resolvedSrc);
+                const overlayToggle = document.getElementById('overlayToggle');
+                if (overlayToggle?.open) {
+                    loadOverlayPreview(pageId, resolvedSrc);
+                }
             }
         } else {
             document.getElementById('markdownContent').textContent = 'Analysis not available yet.';
@@ -267,7 +354,7 @@ function resetOverlayPreview() {
     }
     if (overlayPlaceholder) {
         overlayPlaceholder.style.display = 'block';
-        overlayPlaceholder.textContent = 'Select a page to generate a rendered overlay image preview.';
+        overlayPlaceholder.textContent = 'Select a page and open the overlay preview to generate the rendered image.';
     }
 }
 
@@ -503,7 +590,43 @@ async function reprocessSelectedPages() {
     }
 }
 
+function initNavigationControls() {
+    const dropdown = document.getElementById('pageSelect');
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    const overlayToggle = document.getElementById('overlayToggle');
+
+    selectionState.maxPage = parseInt(dropdown?.dataset.maxPage || selectionState.maxPage || '0', 10) || selectionState.maxPage;
+
+    dropdown?.addEventListener('change', (e) => {
+        const value = parseInt(e.target.value, 10);
+        if (!isNaN(value)) handlePageSelection(value);
+    });
+
+    prevBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (selectionState.currentPageNumber > 1) {
+            handlePageSelection(selectionState.currentPageNumber - 1);
+        }
+    });
+
+    nextBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (selectionState.maxPage && selectionState.currentPageNumber < selectionState.maxPage) {
+            handlePageSelection(selectionState.currentPageNumber + 1);
+        }
+    });
+
+    overlayToggle?.addEventListener('toggle', () => {
+        if (overlayToggle.open && overlayContext.pageId) {
+            loadOverlayPreview(overlayContext.pageId, overlayContext.baseImageSrc);
+        }
+    });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
+    initNavigationControls();
+    hydrateInitialPageSelection();
     checkFailures();
 });
