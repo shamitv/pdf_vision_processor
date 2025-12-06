@@ -41,7 +41,7 @@ document.getElementById('uploadForm')?.addEventListener('submit', async (e) => {
 const selectionState = {
     currentPageNumber: null,
     currentPageId: null,
-    maxPage: parseInt(document.getElementById('pageSelect')?.dataset.maxPage || '0', 10)
+    maxPage: 0 // Will be hydrated on DOMContentLoaded
 };
 
 const overlayContext = {
@@ -66,7 +66,18 @@ function setActivePageLink(pageNumber) {
 
 function syncControls(pageNumber) {
     const dropdown = document.getElementById('pageSelect');
-    if (dropdown) dropdown.value = String(pageNumber);
+    if (dropdown) {
+        dropdown.value = String(pageNumber);
+        // Fallback: if value didn't stick (e.g. type mismatch), try forcing it
+        if (dropdown.value !== String(pageNumber)) {
+            console.warn(`Failed to set dropdown value to ${pageNumber}`);
+        }
+    }
+
+    const countLabel = document.getElementById('pageCountLabel');
+    if (countLabel && selectionState.maxPage) {
+        countLabel.textContent = `of ${selectionState.maxPage}`;
+    }
 
     const prevBtn = document.getElementById('prevPageBtn');
     const nextBtn = document.getElementById('nextPageBtn');
